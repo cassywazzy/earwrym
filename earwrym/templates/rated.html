@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - Rated{% endblock %}
+{% block content %}
+<div class="rated-page">
+    <h2>Rated Albums <span class="count">({{ total }})</span></h2>
+
+    <div class="album-list">
+        {% for album in albums %}
+        <div class="album-card state-rated">
+            <div class="album-art">
+                {% if album['cover_art_url'] %}
+                <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                {% else %}
+                <div class="art-placeholder"></div>
+                {% endif %}
+            </div>
+            <div class="album-info">
+                <span class="album-title">{{ album['title'] }}</span>
+                <span class="album-artist">{{ album['artist'] }}{% if album['year'] %} ({{ album['year'] }}){% endif %}</span>
+                <div class="album-rating">
+                    {% if album['rym_rating'] %}
+                    <span class="rating-value">{{ '%.1f'|format(album['rym_rating']) }}</span>
+                    <span class="rating-stars">{% for i in range((album['rym_rating'] * 2)|int) %}&#9733;{% endfor %}</span>
+                    {% endif %}
+                </div>
+                <span class="album-meta">{{ album['genre_bucket'] }} &middot; Rated {{ album['rym_rated_at'][:10] if album['rym_rated_at'] else 'unknown' }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if total > per_page %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="/rated?page={{ page - 1 }}" class="btn">Previous</a>
+        {% endif %}
+        <span>Page {{ page }} of {{ ((total - 1) // per_page) + 1 }}</span>
+        {% if page * per_page < total %}
+        <a href="/rated?page={{ page + 1 }}" class="btn">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - Currently Listening{% endblock %}
+{% block content %}
+<div class="section">
+    <h2>Currently Listening <span class="count">({{ total }})</span></h2>
+    {% if albums %}
+    <div class="album-grid">
+        {% for album in albums %}
+        <div class="album-card state-listening">
+            <div class="album-art">
+                {% if album['cover_art_url'] %}
+                <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                {% else %}
+                <div class="art-placeholder"></div>
+                {% endif %}
+                <svg class="progress-ring" viewBox="0 0 36 36">
+                    <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path class="ring-fill" stroke-dasharray="{{ (album['completion'] or 0) * 100 }}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <text x="18" y="20.35" class="ring-text">{{ ((album['completion'] or 0) * 100)|int }}%</text>
+                </svg>
+            </div>
+            <div class="album-info">
+                <span class="album-title">{{ album['title'] }}</span>
+                <span class="album-artist">{{ album['artist'] }}</span>
+                <span class="album-meta">{{ album['tracks_heard'] or 0 }}/{{ album['track_count'] or '?' }} tracks</span>
+                <div class="album-actions">
+                    <button class="btn btn-sm" onclick="moveAlbum({{ album['id'] }}, 'listened-unrated')">Mark Listened</button>
+                    <button class="btn btn-dismiss" onclick="dismissAlbum({{ album['id'] }})">Dismiss</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">Nothing playing right now.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - Pending Review{% endblock %}
+{% block content %}
+<div class="pending-page">
+    <h2>Pending Review <span class="count">({{ items|length }})</span></h2>
+    <p class="subtitle">Albums downloaded via Lidarr that aren't on your RYM wishlist. Accept to add to your to-listen queue, or deny to ignore.</p>
+
+    {% if items %}
+    <div class="pending-actions-bar">
+        <button class="btn" onclick="acceptAll()">Accept All</button>
+    </div>
+
+    <div class="album-list">
+        {% for item in items %}
+        <div class="album-card state-pending" id="pending-{{ item['id'] }}">
+            <div class="album-art">
+                {% if item['cover_url'] %}
+                <img src="{{ item['cover_url'] }}" alt="{{ item['title'] }}" loading="lazy">
+                {% else %}
+                <div class="art-placeholder"></div>
+                {% endif %}
+            </div>
+            <div class="album-info">
+                <span class="album-title">{{ item['title'] }}</span>
+                <span class="album-artist">{{ item['artist'] }}</span>
+                <span class="album-meta">Added {{ item['added_at'][:10] }}</span>
+                <div class="album-actions">
+                    <button class="btn btn-accept" onclick="acceptPending({{ item['id'] }})">Add to queue</button>
+                    <button class="btn btn-dismiss" onclick="denyPending({{ item['id'] }})">Not interested</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">No pending albums to review.</p>
+    {% endif %}
+</div>
+
+<script>
+async function acceptPending(id) {
+    await fetch(`/api/pending/${id}/accept`, {method: 'POST'});
+    document.getElementById(`pending-${id}`).remove();
+    updateCount();
+}
+
+async function denyPending(id) {
+    await fetch(`/api/pending/${id}/deny`, {method: 'POST'});
+    document.getElementById(`pending-${id}`).remove();
+    updateCount();
+}
+
+async function acceptAll() {
+    if (!confirm('Accept all pending albums into your to-listen queue?')) return;
+    await fetch('/api/pending/accept-all', {method: 'POST'});
+    location.reload();
+}
+
+function updateCount() {
+    const remaining = document.querySelectorAll('.album-card').length;
+    document.querySelector('.count').textContent = `(${remaining})`;
+    if (remaining === 0) {
+        document.querySelector('.album-list').innerHTML = '<p class="empty">No pending albums to review.</p>';
+        document.querySelector('.pending-actions-bar').style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

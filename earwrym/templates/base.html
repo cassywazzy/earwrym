@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Earwrym{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <a href="/" class="logo">Earwrym</a>
+            <nav>
+                <a href="/" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a>
+                <a href="/to-listen" class="{% if request.path == '/to-listen' %}active{% endif %}">To-Listen</a>
+                <a href="/rated" class="{% if request.path == '/rated' %}active{% endif %}">Rated</a>
+                <a href="/stats" class="{% if request.path == '/stats' %}active{% endif %}">Stats</a>
+                <a href="/playlists" class="{% if request.path == '/playlists' %}active{% endif %}">Playlists</a>
+                <a href="/pending" class="{% if request.path == '/pending' %}active{% endif %}">Pending{% if pending_count %} <span class="badge">{{ pending_count }}</span>{% endif %}</a>
+                <a href="https://1001albumsgenerator.com/groups/{{ config.get('one_thousand_one_albums', {}).get('group_slug', '') }}" target="_blank" class="external">1001 Albums</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span class="year-counter">{{ stats['albums_rated'] or 0 }} albums in {{ year }}</span>
+            {% if stats['current_streak'] and stats['current_streak'] > 1 %}
+            <span class="streak">{{ stats['current_streak'] }}-day streak</span>
+            {% endif %}
+            <button class="btn-refresh" onclick="triggerRefresh()">Refresh</button>
+        </div>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <script>
+    async function triggerRefresh() {
+        const btn = document.querySelector('.btn-refresh');
+        btn.disabled = true;
+        btn.textContent = 'Refreshing...';
+        try {
+            await fetch('/api/refresh', {method: 'POST'});
+            setTimeout(() => location.reload(), 3000);
+        } catch(e) {
+            btn.textContent = 'Error';
+            setTimeout(() => { btn.textContent = 'Refresh'; btn.disabled = false; }, 2000);
+        }
+    }
+
+    async function deleteAlbum(id) {
+        if (!confirm('Remove from queue?')) return;
+        await fetch(`/api/album/${id}/delete`, {method: 'POST'});
+        location.reload();
+    }
+
+    async function moveAlbum(id, state) {
+        await fetch(`/api/album/${id}/move`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({state})});
+        location.reload();
+    }
+
+    async function changeBucket(id, bucket) {
+        await fetch(`/api/album/${id}/bucket`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({bucket})});
+        location.reload();
+    }
+
+    async function dismissAlbum(id) {
+        if (!confirm('Dismiss this album? It won\'t appear in your queue again.')) return;
+        await fetch(`/api/album/${id}/move`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({state: 'dismissed'})});
+        location.reload();
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - To-Listen Queue{% endblock %}
+{% block content %}
+<div class="to-listen-page">
+    <h2>To-Listen Queue <span class="count">({{ albums|length }})</span></h2>
+
+    <div class="filter-bar">
+        <button class="filter-btn active" onclick="filterGenre('all')">All</button>
+        {% for bucket in genre_buckets %}
+        <button class="filter-btn" onclick="filterGenre('{{ bucket }}')">{{ bucket }} <span class="filter-count">({{ genre_counts.get(bucket, 0) }})</span></button>
+        {% endfor %}
+    </div>
+
+    <div class="album-list sortable" id="to-listen-list">
+        {% for album in albums %}
+        <div class="album-card state-to-listen" data-id="{{ album['id'] }}" data-genre="{{ album['genre_bucket'] }}" draggable="true">
+            <div class="drag-handle">&#9776;</div>
+            <div class="album-art">
+                {% if album['cover_art_url'] %}
+                <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                {% else %}
+                <div class="art-placeholder"></div>
+                {% endif %}
+            </div>
+            <div class="album-info">
+                <span class="album-title">{{ album['title'] }}</span>
+                <span class="album-artist">{{ album['artist'] }}{% if album['year'] %} ({{ album['year'] }}){% endif %}</span>
+                {% if album['wikipedia_blurb'] %}
+                <span class="album-blurb">{{ album['wikipedia_blurb'] }}</span>
+                {% endif %}
+                <div class="album-meta-row">
+                    <span class="genre-tag">{{ album['genre_bucket'] }}</span>
+                    {% if album['source'] == '1001albums' %}
+                    <span class="source-tag">1001 Albums</span>
+                    {% elif album['source'] == 'wishlist' %}
+                    <span class="source-tag">RYM Wishlist</span>
+                    {% elif album['source'] == 'lidarr' %}
+                    <span class="source-tag">Lidarr</span>
+                    {% elif album['source'] == 'recommendation' %}
+                    <span class="source-tag">Recommended</span>
+                    {% endif %}
+                </div>
+                <div class="album-actions">
+                    <select onchange="changeBucket({{ album['id'] }}, this.value)">
+                        {% for bucket in genre_buckets %}
+                        <option value="{{ bucket }}" {% if bucket == album['genre_bucket'] %}selected{% endif %}>{{ bucket }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="btn btn-sm" onclick="dismissAlbum({{ album['id'] }})">Not interested</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteAlbum({{ album['id'] }})">Remove</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+const list = document.getElementById('to-listen-list');
+let draggedEl = null;
+
+list.addEventListener('dragstart', e => {
+    draggedEl = e.target.closest('.album-card');
+    draggedEl.classList.add('dragging');
+});
+
+list.addEventListener('dragend', e => {
+    draggedEl.classList.remove('dragging');
+    const cards = [...list.querySelectorAll('.album-card:not([style*="display: none"])')];
+    cards.forEach((card, i) => {
+        fetch(`/api/album/${card.dataset.id}/reorder`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({position: i})
+        });
+    });
+});
+
+list.addEventListener('dragover', e => {
+    e.preventDefault();
+    const afterEl = getDragAfterElement(list, e.clientY);
+    if (afterEl) list.insertBefore(draggedEl, afterEl);
+    else list.appendChild(draggedEl);
+});
+
+function getDragAfterElement(container, y) {
+    const els = [...container.querySelectorAll('.album-card:not(.dragging):not([style*="display: none"])')];
+    return els.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) return {offset, element: child};
+        return closest;
+    }, {offset: Number.NEGATIVE_INFINITY}).element;
+}
+
+function filterGenre(genre) {
+    const cards = list.querySelectorAll('.album-card');
+    const btns = document.querySelectorAll('.filter-btn');
+    btns.forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    cards.forEach(card => {
+        if (genre === 'all' || card.dataset.genre === genre) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+</script>
+{% endblock %}

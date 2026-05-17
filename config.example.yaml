@@ -1,0 +1,84 @@
+listenbrainz:
+  enabled: true
+  username: ""  # your ListenBrainz username
+
+rym:
+  enabled: true
+  username: ""  # your RYM profile slug (from rateyourmusic.com/~<slug>)
+  ratings_interval_seconds: 7200    # check ratings every 2h
+  wishlist_interval_seconds: 21600  # check wishlist every 6h
+  wishlist_to_lidarr: true          # auto-add wishlist items to Lidarr
+  scrape_enabled: false  # RYM blocks automated scraping (Cloudflare). Use /api/import-ratings instead.
+  proxy_url: ""  # optional HTTP proxy for RYM requests (e.g. VPN proxy for IP protection)
+
+navidrome:
+  url: ""         # e.g. http://10.1.10.56:4533
+  username: ""
+  password: ""
+
+lidarr:
+  enabled: true
+  url: ""         # e.g. http://10.1.10.63:8686
+  api_key: ""
+  quality_profile_id: 1
+  root_folder: "/music"
+
+one_thousand_one_albums:
+  enabled: false
+  project_slug: ""       # your personal 1001albumsgenerator.com project name
+  group_slug: ""         # group project slug (optional)
+  member_name: ""        # your name in the group (must match exactly)
+  push_ratings: true     # push RYM rating back to 1001albums (both personal + group)
+  push_reviews: false    # include review text when pushing (pulls from RYM if available)
+
+musicbrainz:
+  user_agent: "Earwrym/1.0 (https://github.com/YOUR_USERNAME/earwrym)"
+  # MB requires a descriptive user-agent with contact info
+
+album_filter:
+  min_tracks: 4              # must have >3 tracks
+  min_duration_seconds: 480  # OR must be >8 minutes total
+  completion_threshold: 0.8  # 80% of tracks = "fully listened"
+
+poll_interval_seconds: 300  # LB listen check every 5 min
+
+genre_buckets:
+  - name: "Metal/Heavy"
+    tags: ["metal", "nu-metal", "industrial-metal", "doom-metal", "black-metal",
+           "death-metal", "sludge-metal", "post-metal", "hardcore", "metalcore",
+           "thrash-metal", "progressive-metal", "stoner-metal", "grindcore"]
+  - name: "Electronic"
+    tags: ["electronic", "synth-pop", "idm", "witch-house", "house", "techno",
+           "drum-and-bass", "trance", "electropop", "vaporwave", "ambient-electronic",
+           "downtempo", "trip-hop", "future-bass", "uk-garage"]
+  - name: "Hip-Hop"
+    tags: ["hip-hop", "rap", "trap", "cloud-rap", "conscious-hip-hop",
+           "gangsta-rap", "g-funk", "boom-bap", "drill", "grime",
+           "abstract-hip-hop", "southern-hip-hop"]
+  - name: "Indie/Alt"
+    tags: ["indie-rock", "indie-pop", "alternative-rock", "emo", "post-punk",
+           "slowcore", "midwest-emo", "math-rock", "jangle-pop", "power-pop",
+           "garage-rock", "lo-fi", "folk-rock", "singer-songwriter"]
+  - name: "Dreampop/Shoegaze"
+    tags: ["dream-pop", "shoegaze", "ambient", "ethereal", "space-rock",
+           "post-rock", "neo-psychedelia", "chillwave", "ethereal-wave",
+           "dark-ambient", "drone", "new-age"]
+  - name: "Experimental"
+    tags: ["experimental", "noise", "avant-garde", "art-pop", "hyperpop",
+           "glitch", "industrial", "no-wave", "free-improvisation",
+           "musique-concrète", "sound-collage", "electroacoustic"]
+  - name: "Pop/R&B"
+    tags: ["pop", "r&b", "soul", "funk", "disco", "new-wave", "country-pop",
+           "folk-pop", "dance-pop", "neo-soul", "contemporary-r&b",
+           "synthwave", "city-pop"]
+  - name: "Other"
+    tags: []  # catch-all for anything unmatched
+
+healthchecks:
+  ping_url: ""  # e.g. http://10.1.10.64:8095/ping/<uuid>
+
+ui:
+  max_visible_per_section: 5
+  show_wikipedia_blurb: true
+  show_album_art: true
+  app_name: "Earwrym"

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - Dashboard{% endblock %}
+{% block content %}
+<div class="dashboard">
+
+    <section class="section section-listening">
+        <h2>Listening <span class="count">({{ listening_total }})</span></h2>
+        {% if listening %}
+        <div class="album-grid">
+            {% for album in listening %}
+            <div class="album-card state-listening">
+                <div class="album-art">
+                    {% if album['cover_art_url'] %}
+                    <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                    {% else %}
+                    <div class="art-placeholder"></div>
+                    {% endif %}
+                    <svg class="progress-ring" viewBox="0 0 36 36">
+                        <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        <path class="ring-fill" stroke-dasharray="{{ (album['completion'] or 0) * 100 }}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        <text x="18" y="20.35" class="ring-text">{{ ((album['completion'] or 0) * 100)|int }}%</text>
+                    </svg>
+                </div>
+                <div class="album-info">
+                    <span class="album-title">{{ album['title'] }}</span>
+                    <span class="album-artist">{{ album['artist'] }}</span>
+                    <span class="album-meta">{{ album['tracks_heard'] or 0 }}/{{ album['track_count'] or '?' }} tracks</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if listening_total > 5 %}
+        <a href="/listening" class="show-more">Show all {{ listening_total }}</a>
+        {% endif %}
+        {% else %}
+        <p class="empty">Nothing playing right now. Go listen to something!</p>
+        {% endif %}
+    </section>
+
+    <section class="section section-unrated">
+        <h2>Listened &amp; Unrated <span class="count">({{ unrated_total }})</span></h2>
+        {% if unrated %}
+        <div class="album-grid">
+            {% for album in unrated %}
+            <div class="album-card state-unrated">
+                <div class="album-art">
+                    {% if album['cover_art_url'] %}
+                    <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                    {% else %}
+                    <div class="art-placeholder"></div>
+                    {% endif %}
+                </div>
+                <div class="album-info">
+                    <span class="album-title">{{ album['title'] }}</span>
+                    <span class="album-artist">{{ album['artist'] }}</span>
+                    {% if album['wikipedia_blurb'] %}
+                    <span class="album-blurb">{{ album['wikipedia_blurb'] }}</span>
+                    {% endif %}
+                    <div class="album-actions">
+                        <a href="https://rateyourmusic.com/search?searchterm={{ (album['artist'] ~ ' ' ~ album['title'])|urlencode }}&searchtype=l" target="_blank" class="btn btn-rate">Rate on RYM</a>
+                        <button class="btn btn-dismiss" onclick="dismissAlbum({{ album['id'] }})">Dismiss</button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if unrated_total > 5 %}
+        <a href="/unrated" class="show-more">Show all {{ unrated_total }}</a>
+        {% endif %}
+        {% else %}
+        <p class="empty">All caught up! No unrated albums.</p>
+        {% endif %}
+    </section>
+
+    <section class="section section-to-listen">
+        <h2>To-Listen Queue <span class="count">({{ to_listen_total }})</span></h2>
+        {% if to_listen %}
+        <div class="album-grid">
+            {% for album in to_listen %}
+            <div class="album-card state-to-listen" data-id="{{ album['id'] }}">
+                <div class="album-art">
+                    {% if album['cover_art_url'] %}
+                    <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                    {% else %}
+                    <div class="art-placeholder"></div>
+                    {% endif %}
+                </div>
+                <div class="album-info">
+                    <span class="album-title">{{ album['title'] }}</span>
+                    <span class="album-artist">{{ album['artist'] }}</span>
+                    <span class="album-meta genre-tag">{{ album['genre_bucket'] }}</span>
+                    {% if album['source'] == '1001albums' %}
+                    <span class="album-meta source-tag">1001 Albums</span>
+                    {% endif %}
+                    <div class="album-actions">
+                        <button class="btn btn-sm" onclick="deleteAlbum({{ album['id'] }})">Remove</button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if to_listen_total > 5 %}
+        <a href="/to-listen" class="show-more">Show all {{ to_listen_total }}</a>
+        {% endif %}
+        {% else %}
+        <p class="empty">Queue is empty. Add albums from your RYM wishlist or recommendations.</p>
+        {% endif %}
+    </section>
+
+</div>
+{% endblock %}

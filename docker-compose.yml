@@ -1,0 +1,33 @@
+services:
+  earwrym:
+    build: .
+    container_name: earwrym
+    restart: unless-stopped
+    init: true
+    ports:
+      - "8587:8587"
+    volumes:
+      - earwrym_data:/data
+      - ./config.yaml:/data/config.yaml:ro
+    environment:
+      - EARWRYM_PORT=8587
+
+  rym-watcher:
+    build: ./rym-watcher
+    container_name: rym-watcher
+    restart: unless-stopped
+    depends_on:
+      - earwrym
+    volumes:
+      - earwrym_data:/data
+    environment:
+      - RYM_USERNAME=cassywassy
+      - EARWRYM_URL=http://earwrym:8587
+      - FLARESOLVERR_URL=http://10.1.10.63:8191
+      - CHECK_INTERVAL_SECONDS=7200
+      - JITTER_SECONDS=300
+      - MAX_PAGES=50
+      - HC_PING_URL=http://10.1.10.64:8095/ping/b788c00d-839a-423c-bf01-0729abf937d6
+
+volumes:
+  earwrym_data:
