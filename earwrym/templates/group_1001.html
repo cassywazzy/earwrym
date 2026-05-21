@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - 1001 Albums Group{% endblock %}
+{% block content %}
+<div class="group-page">
+
+    {% if not group %}
+    <p class="empty">Could not load group data.</p>
+    {% else %}
+
+    <div class="group-hero">
+        <h2>1001 Albums: {{ config.get('one_thousand_one_albums', {}).get('group_slug', '') }}</h2>
+        <div class="group-headline">
+            <div class="headline-stat">
+                <span class="headline-number accent">{{ group.get('numberOfGeneratedAlbums', 0) }}</span>
+                <span class="headline-label">Albums Generated</span>
+            </div>
+            <div class="headline-stat">
+                <span class="headline-number green">{{ group.get('totalVotes', 0) }}</span>
+                <span class="headline-label">Total Votes</span>
+            </div>
+            <div class="headline-stat">
+                <span class="headline-number">{{ '%.1f'|format(group.get('averageRating', 0)) }}</span>
+                <span class="headline-label">Avg Rating</span>
+            </div>
+            <div class="headline-stat">
+                <span class="headline-number muted">{{ group.get('members', [])|length }}</span>
+                <span class="headline-label">Members</span>
+            </div>
+        </div>
+    </div>
+
+    {% if group.get('currentAlbum') %}
+    <section class="group-section">
+        <h3>Currently Listening</h3>
+        <div class="group-current">
+            {% set ca = group['currentAlbum'] %}
+            {% if ca.get('images') and ca['images'] %}
+            <img src="{{ ca['images'][0]['url'] }}" alt="" class="group-current-art">
+            {% endif %}
+            <div class="group-current-info">
+                <span class="group-current-title">{{ ca.get('name', '') }}</span>
+                <span class="group-current-artist">{{ ca.get('artist', '') }} ({{ ca.get('releaseDate', '')[:4] }})</span>
+                {% if ca.get('genres') %}
+                <div class="group-current-genres">
+                    {% for g in ca['genres'][:4] %}
+                    <span class="genre-tag">{{ g }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="group-section">
+        <h3>Members</h3>
+        <div class="group-members">
+            {% for name, ms in member_stats.items() %}
+            <div class="group-member-card">
+                <div class="group-member-header">
+                    <span class="group-member-name">{{ name }}</span>
+                    <span class="group-member-avg">{{ '%.1f'|format(ms['avg']) }}</span>
+                </div>
+                <div class="group-member-stats">
+                    <span>{{ ms['rated'] }} rated</span>
+                    <span>{{ ms['total'] }} total</span>
+                </div>
+                {% if ms.get('current') %}
+                <div class="group-member-current">
+                    Now: <strong>{{ ms['current'].get('name', '?') }}</strong> by {{ ms['current'].get('artist', '?') }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% if group.get('highestRatedAlbums') %}
+    <div class="group-two-col">
+        <section class="group-section">
+            <h3>Group Favorites</h3>
+            <div class="group-album-list">
+                {% for a in group['highestRatedAlbums'] %}
+                <div class="group-album-row">
+                    {% if a.get('images') and a['images'] %}
+                    <img src="{{ a['images'][0]['url'] }}" alt="" class="group-album-thumb">
+                    {% else %}
+                    <div class="group-album-thumb placeholder"></div>
+                    {% endif %}
+                    <div class="group-album-info">
+                        <span class="group-album-title">{{ a.get('name', '') }}</span>
+                        <span class="group-album-artist">{{ a.get('artist', '') }}</span>
+                    </div>
+                    <span class="group-album-rating green">{{ '%.1f'|format(a.get('globalRating', 0)) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        {% if group.get('lowestRatedAlbums') %}
+        <section class="group-section">
+            <h3>Group Duds</h3>
+            <div class="group-album-list">
+                {% for a in group['lowestRatedAlbums'] %}
+                <div class="group-album-row">
+                    {% if a.get('images') and a['images'] %}
+                    <img src="{{ a['images'][0]['url'] }}" alt="" class="group-album-thumb">
+                    {% else %}
+                    <div class="group-album-thumb placeholder"></div>
+                    {% endif %}
+                    <div class="group-album-info">
+                        <span class="group-album-title">{{ a.get('name', '') }}</span>
+                        <span class="group-album-artist">{{ a.get('artist', '') }}</span>
+                    </div>
+                    <span class="group-album-rating danger">{{ '%.1f'|format(a.get('globalRating', 0)) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if members_history %}
+    <section class="group-section">
+        <h3>Recent Activity</h3>
+        {% for name, hist in members_history.items() %}
+        <div class="group-history-member">
+            <h4>{{ name }}</h4>
+            <div class="group-history-list">
+                {% for h in hist[:8] %}
+                {% set a = h.get('album', {}) %}
+                <div class="group-history-item">
+                    {% if a.get('images') and a['images'] %}
+                    <img src="{{ a['images'][0]['url'] }}" alt="" class="group-album-thumb">
+                    {% else %}
+                    <div class="group-album-thumb placeholder"></div>
+                    {% endif %}
+                    <div class="group-album-info">
+                        <span class="group-album-title">{{ a.get('name', '') }}</span>
+                        <span class="group-album-artist">{{ a.get('artist', '') }}</span>
+                    </div>
+                    {% if h.get('rating') and h['rating'] != 'did-not-listen' %}
+                    <span class="group-album-rating">{{ h['rating'] }}/5</span>
+                    {% else %}
+                    <span class="group-album-rating muted">skipped</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if group.get('favoriteGenres') or group.get('ratingByDecade') %}
+    <div class="group-two-col">
+        {% if group.get('favoriteGenres') %}
+        <section class="group-section">
+            <h3>Favorite Genres</h3>
+            <div class="group-genre-list">
+                {% for g in group['favoriteGenres'] %}
+                <div class="group-genre-item">
+                    <span>{{ g.get('genre', '?') }}</span>
+                    <span class="group-genre-avg">{{ '%.1f'|format(g.get('averageRating', 0)) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        {% if group.get('ratingByDecade') %}
+        <section class="group-section">
+            <h3>Rating by Decade</h3>
+            <div class="group-decade-list">
+                {% for d in group['ratingByDecade'] %}
+                <div class="group-decade-item">
+                    <span>{{ d.get('decade', '?') }}</span>
+                    <span class="group-decade-avg">{{ '%.1f'|format(d.get('averageRating', 0)) }}</span>
+                    <span class="text-muted">({{ d.get('numberOfAlbums', 0) }})</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% endif %}
+</div>
+{% endblock %}

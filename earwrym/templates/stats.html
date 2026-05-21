@@ -1,65 +1,190 @@
 {% extends "base.html" %}
-{% block title %}Earwrym - Year in Review{% endblock %}
+{% block title %}Earwrym - Stats{% endblock %}
 {% block content %}
 <div class="stats-page">
-    <h2>{{ year }} in Review</h2>
 
-    <div class="stats-grid">
-        <div class="stat-card big">
-            <span class="stat-number">{{ stats['albums_rated'] or 0 }}</span>
-            <span class="stat-label">Albums Rated</span>
+    <div class="stats-hero">
+        <h2>{{ year }} in Review</h2>
+        <p class="stats-subtitle">Your listening journey so far</p>
+    </div>
+
+    <div class="stats-headline">
+        <div class="headline-stat">
+            <span class="headline-number accent">{{ total_albums }}</span>
+            <span class="headline-label">Albums Tracked</span>
         </div>
-        <div class="stat-card">
-            <span class="stat-number">{{ all_time_count }}</span>
-            <span class="stat-label">All-Time Rated</span>
+        <div class="headline-stat">
+            <span class="headline-number green">{{ all_time_count }}</span>
+            <span class="headline-label">Rated</span>
         </div>
-        <div class="stat-card">
-            <span class="stat-number">{{ stats['current_streak'] or 0 }}</span>
-            <span class="stat-label">Current Streak</span>
+        <div class="headline-stat">
+            <span class="headline-number">{{ '%.2f'|format(avg_rating or 0) }}</span>
+            <span class="headline-label">Avg Rating</span>
         </div>
-        <div class="stat-card">
-            <span class="stat-number">{{ stats['longest_streak'] or 0 }}</span>
-            <span class="stat-label">Longest Streak</span>
+        <div class="headline-stat">
+            <span class="headline-number muted">{{ lb_listen_count or 0 }}</span>
+            <span class="headline-label">LB Listens</span>
         </div>
     </div>
 
-    <section class="stats-section">
-        <h3>Monthly Breakdown</h3>
-        <div class="monthly-chart">
-            {% for m in monthly %}
-            <div class="month-bar">
-                <div class="bar" style="height: {{ (m['cnt'] / (monthly|map(attribute='cnt')|max or 1)) * 100 }}%"></div>
-                <span class="month-label">{{ m['month'][5:7] }}</span>
-                <span class="month-count">{{ m['cnt'] }}</span>
-            </div>
-            {% endfor %}
+    <div class="stats-pipeline">
+        {% set pipe_states = ['to-listen', 'listening', 'listened-unrated', 'rated', 'dismissed'] %}
+        {% set pipe_labels = {'to-listen': 'To Listen', 'listening': 'Listening', 'listened-unrated': 'Unrated', 'rated': 'Rated', 'dismissed': 'Dismissed'} %}
+        {% set pipe_colors = {'to-listen': 'var(--to-listen)', 'listening': 'var(--listening)', 'rated': 'var(--rated)', 'listened-unrated': 'var(--unrated)', 'dismissed': 'var(--danger)'} %}
+        {% for s in pipe_states %}
+        {% if pipeline.get(s, 0) > 0 %}
+        <div class="pipe-segment" style="flex: {{ pipeline.get(s, 0) }}; background: {{ pipe_colors.get(s, 'var(--border)') }};" title="{{ pipe_labels.get(s, s) }}: {{ pipeline.get(s, 0) }}">
+            <span class="pipe-label">{{ pipe_labels.get(s, s) }}</span>
+            <span class="pipe-count">{{ pipeline.get(s, 0) }}</span>
         </div>
-    </section>
+        {% endif %}
+        {% endfor %}
+    </div>
 
-    <section class="stats-section">
-        <h3>Genre Distribution</h3>
-        <div class="genre-bars">
-            {% for g in genre_counts %}
-            <div class="genre-row">
-                <span class="genre-name">{{ g['genre_bucket'] }}</span>
-                <div class="genre-bar-container">
-                    <div class="genre-bar" style="width: {{ (g['cnt'] / (genre_counts[0]['cnt'] or 1)) * 100 }}%"></div>
+    <div class="stats-two-col">
+        <section class="stats-section">
+            <h3>Your Rating Distribution</h3>
+            <div class="rating-histogram">
+                {% set max_r = rating_dist|map(attribute='cnt')|max if rating_dist else 1 %}
+                {% for r in rating_dist %}
+                <div class="hist-col">
+                    <div class="hist-bar-wrap">
+                        <div class="hist-bar" style="height: {{ (r['cnt'] / (max_r or 1)) * 100 }}%">
+                            <span class="hist-val">{{ r['cnt'] }}</span>
+                        </div>
+                    </div>
+                    <span class="hist-label">{{ '%.1f'|format(r['bucket']) }}</span>
                 </div>
-                <span class="genre-count">{{ g['cnt'] }}</span>
+                {% endfor %}
+            </div>
+            {% if avg_rating %}
+            <div class="hist-avg">Your avg: <strong>{{ '%.2f'|format(avg_rating) }}</strong></div>
+            {% endif %}
+        </section>
+
+        <section class="stats-section">
+            <h3>RYM Community Ratings</h3>
+            <div class="rating-histogram rym">
+                {% set max_rym = rym_rating_dist|map(attribute='cnt')|max if rym_rating_dist else 1 %}
+                {% for r in rym_rating_dist %}
+                <div class="hist-col">
+                    <div class="hist-bar-wrap">
+                        <div class="hist-bar" style="height: {{ (r['cnt'] / (max_rym or 1)) * 100 }}%">
+                            <span class="hist-val">{{ r['cnt'] }}</span>
+                        </div>
+                    </div>
+                    <span class="hist-label">{{ '%.1f'|format(r['bucket']) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% if rym_avg %}
+            <div class="hist-avg">RYM avg: <strong>{{ '%.2f'|format(rym_avg) }}</strong> across {{ rym_total }} ratings</div>
+            {% endif %}
+        </section>
+    </div>
+
+    <section class="stats-section">
+        <h3>Genres</h3>
+        <div class="genre-chart">
+            {% set max_gc = genre_counts[0]['cnt'] if genre_counts else 1 %}
+            {% for g in genre_counts %}
+            <div class="genre-chart-row">
+                <span class="genre-chart-name">{{ g['genre_bucket'] }}</span>
+                <div class="genre-chart-bar-wrap">
+                    <div class="genre-chart-bar" style="width: {{ (g['cnt'] / (max_gc or 1)) * 100 }}%">
+                        <span class="genre-chart-count">{{ g['cnt'] }}</span>
+                    </div>
+                </div>
+                {% for gr in genre_ratings if gr['genre_bucket'] == g['genre_bucket'] %}
+                <span class="genre-chart-avg">{{ '%.2f'|format(gr['avg_r']) }}</span>
+                {% endfor %}
             </div>
             {% endfor %}
         </div>
     </section>
 
-    {% if lb_top_artists %}
+    {% if highest_rated %}
     <section class="stats-section">
-        <h3>Top Artists ({{ year }})</h3>
-        <div class="top-artists">
-            {% for artist in lb_top_artists %}
-            <div class="artist-row">
-                <span class="artist-rank">{{ loop.index }}</span>
-                <span class="artist-name">{{ artist['artist_name'] }}</span>
-                <span class="artist-count">{{ artist['listen_count'] }} plays</span>
+        <h3>Highest Rated</h3>
+        <div class="album-showcase">
+            {% for a in highest_rated[:5] %}
+            <div class="showcase-item">
+                {% if a['cover_art_url'] %}
+                <img src="{{ a['cover_art_url'] }}" alt="{{ a['title'] }}" class="showcase-art">
+                {% else %}
+                <div class="showcase-art placeholder"></div>
+                {% endif %}
+                <div class="showcase-info">
+                    <span class="showcase-rating">{{ '%.1f'|format(a['rym_rating']) }}</span>
+                    <span class="showcase-title">{{ a['title'] }}</span>
+                    <span class="showcase-artist">{{ a['artist'] }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <div class="stats-two-col">
+        <section class="stats-section">
+            <h3>Top Artists</h3>
+            <div class="top-artists-list">
+                {% for a in top_artists %}
+                <div class="ta-row{% if loop.index <= 3 %} ta-top{% endif %}">
+                    <span class="ta-rank">{{ loop.index }}</span>
+                    <span class="ta-name">{{ a['artist'] }}</span>
+                    <span class="ta-count">{{ a['cnt'] }} album{{ 's' if a['cnt'] != 1 }}</span>
+                    {% if a['avg_r'] %}
+                    <span class="ta-avg">{{ '%.2f'|format(a['avg_r']) }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="stats-section">
+            <h3>By Decade</h3>
+            <div class="decade-chart">
+                {% set max_d = decade_dist|map(attribute='cnt')|max if decade_dist else 1 %}
+                {% for d in decade_dist %}
+                <div class="decade-row">
+                    <span class="decade-label">{{ d['decade'] }}s</span>
+                    <div class="decade-bar-wrap">
+                        <div class="decade-bar" style="width: {{ (d['cnt'] / (max_d or 1)) * 100 }}%"></div>
+                    </div>
+                    <span class="decade-count">{{ d['cnt'] }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
+    {% if disco_leaders %}
+    <section class="stats-section">
+        <h3>Discography Completion</h3>
+        <div class="disco-leaderboard">
+            {% for d in disco_leaders %}
+            <div class="disco-lb-row">
+                <span class="disco-lb-name">{{ d['name'] }}</span>
+                <div class="disco-lb-bar-wrap">
+                    <div class="disco-lb-bar" style="width: {{ (d['pct'] or 0) * 100 }}%"></div>
+                </div>
+                <span class="disco-lb-pct">{{ '%d'|format((d['pct'] or 0) * 100) }}%</span>
+                <span class="disco-lb-count">{{ d['completed_releases'] }}/{{ d['total_releases'] }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if dismissed_by_genre %}
+    <section class="stats-section">
+        <h3>Dismissed by Genre</h3>
+        <div class="dismissed-grid">
+            {% for g in dismissed_by_genre %}
+            <div class="dismissed-chip">
+                <span class="dismissed-genre">{{ g['genre_bucket'] }}</span>
+                <span class="dismissed-count">{{ g['cnt'] }}</span>
             </div>
             {% endfor %}
         </div>
@@ -69,13 +194,32 @@
     {% if lb_activity %}
     <section class="stats-section">
         <h3>Listening Activity</h3>
-        <div class="activity-grid">
-            {% for week in lb_activity[-12:] %}
-            <div class="activity-cell" style="opacity: {{ 0.2 + (week['listen_count'] / (lb_activity|map(attribute='listen_count')|max or 1)) * 0.8 }}" title="{{ week.get('from_ts', '')|string }}: {{ week['listen_count'] }} listens">
+        <div class="heatmap-wrap">
+            {% set max_lc = lb_activity|map(attribute='listen_count')|max if lb_activity else 1 %}
+            {% for week in lb_activity %}
+            <div class="heatmap-cell{% if week['listen_count'] == 0 %} empty{% endif %}"
+                 style="{% if week['listen_count'] > 0 %}opacity: {{ 0.25 + (week['listen_count'] / (max_lc or 1)) * 0.75 }}{% else %}opacity: 0.08{% endif %}"
+                 title="{{ week.get('from_ts', '')|string }}: {{ week['listen_count'] }} listens">
             </div>
             {% endfor %}
         </div>
     </section>
     {% endif %}
+
+    {% if lb_top_artists %}
+    <section class="stats-section">
+        <h3>ListenBrainz Top Artists ({{ year }})</h3>
+        <div class="top-artists-list">
+            {% for artist in lb_top_artists %}
+            <div class="ta-row{% if loop.index <= 3 %} ta-top{% endif %}">
+                <span class="ta-rank">{{ loop.index }}</span>
+                <span class="ta-name">{{ artist['artist_name'] }}</span>
+                <span class="ta-count">{{ artist['listen_count'] }} plays</span>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
 </div>
 {% endblock %}

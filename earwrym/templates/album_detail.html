@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}{{ album['title'] }} - Earwrym{% endblock %}
+{% block content %}
+<div class="detail-page">
+    <div class="detail-hero">
+        <div class="detail-art">
+            {% if album['cover_art_url'] %}
+            <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'detail-art-placeholder'}))">
+            {% else %}
+            <div class="detail-art-placeholder"></div>
+            {% endif %}
+        </div>
+        <div class="detail-meta">
+            <h1 class="detail-title">{{ album['title'] }}</h1>
+            <h2 class="detail-artist">{{ album['artist'] }}</h2>
+            <div class="detail-tags">
+                {% if album['year'] %}<span class="detail-tag">{{ album['year'] }}</span>{% endif %}
+                <span class="detail-tag">{{ album['genre_bucket'] }}</span>
+                <span class="detail-tag state-{{ album['state'] }}">{{ album['state']|replace('-', ' ')|title }}</span>
+                {% if album['source'] %}<span class="detail-tag source">{{ album['source'] }}</span>{% endif %}
+            </div>
+
+            {% if album['rym_rating'] %}
+            <div class="detail-rating">
+                <span class="detail-rating-value">{{ '%.1f'|format(album['rym_rating']) }}</span>
+                <span class="detail-rating-label">RYM</span>
+            </div>
+            {% endif %}
+
+            {% if album['track_count'] %}
+            <div class="detail-stat-row">
+                {{ album['track_count'] }} tracks
+                {% if album['duration_seconds'] %}
+                &middot; {{ (album['duration_seconds'] // 60) }}m {{ album['duration_seconds'] % 60 }}s
+                {% endif %}
+                {% if album['completion'] and album['completion'] > 0 %}
+                &middot; {{ ((album['completion'] or 0) * 100)|int }}% heard
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if album['wikipedia_blurb'] %}
+            <p class="detail-blurb">{{ album['wikipedia_blurb'] }}</p>
+            {% endif %}
+
+            <div class="detail-links">
+                {% if nd_link %}
+                <a href="{{ nd_link }}" target="_blank" class="btn btn-sm">Navidrome</a>
+                {% endif %}
+                {% if jf_link %}
+                <a href="{{ jf_link }}" target="_blank" class="btn btn-sm">Jellyfin</a>
+                {% endif %}
+                {% if album['state'] in ('listening', 'listened-unrated') and not album['rym_rating'] %}
+                <a href="https://rateyourmusic.com/release/album/{{ album['artist']|rym_slug }}/{{ album['title']|rym_slug }}/" target="_blank" class="btn btn-rate">Rate on RYM</a>
+                {% else %}
+                <a href="{{ rym_link }}" target="_blank" class="btn btn-sm">RYM</a>
+                {% endif %}
+                {% if mb_link %}
+                <a href="{{ mb_link }}" target="_blank" class="btn btn-sm">MusicBrainz</a>
+                {% endif %}
+            </div>
+
+            {% if dl_status %}
+            <div class="detail-download">
+                <span class="dl-label">Download:</span>
+                {% if dl_status['status'] == 'completed' %}
+                <span class="dl-status-text">Importing...</span>
+                {% elif dl_status['progress'] == 0 and dl_status.get('seeds', 0) == 0 %}
+                <span class="dl-status-text">Waiting for seeds...</span>
+                {% else %}
+                <span class="dl-status-text">{{ dl_status['status'] }}</span>
+                {% endif %}
+                {% if dl_status['progress'] is not none %}
+                <div class="dl-progress detail-dl-progress">
+                    <div class="dl-bar" style="width:{{ dl_status['progress']|round|int }}%"></div>
+                    <span class="dl-pct">{{ dl_status['progress']|round|int }}%</span>
+                </div>
+                {% endif %}
+                {% if dl_status.get('dlspeed') and dl_status['dlspeed'] > 0 %}
+                <span class="dl-eta">{{ "%.1f"|format(dl_status['dlspeed'] / 1048576) }} MB/s</span>
+                {% endif %}
+                {% if dl_status.get('timeleft') %}<span class="dl-eta">ETA: {{ dl_status['timeleft'] }}</span>{% endif %}
+            </div>
+            {% elif not album['navidrome_id'] %}
+            <div class="detail-download">
+                <span class="dl-label">Not downloaded</span>
+                <button class="btn btn-sm btn-request" onclick="requestDownload({{ album['id'] }}, this)">Request Download</button>
+            </div>
+            {% endif %}
+
+            <div class="detail-actions">
+                <div class="state-switcher">
+                    <span class="state-label">Move to:</span>
+                    {% set states = [('to-listen', 'To Listen'), ('listening', 'Listening'), ('listened-unrated', 'Unrated'), ('rated', 'Rated')] %}
+                    {% for state_val, state_name in states %}
+                    {% if state_val != album['state'] %}
+                    <button class="btn btn-sm state-btn-{{ state_val }}" onclick="moveAlbum({{ album['id'] }}, '{{ state_val }}')">{{ state_name }}</button>
+                    {% endif %}
+                    {% endfor %}
+                    {% if album['state'] != 'dismissed' %}
+                    <button class="btn btn-sm btn-dismiss" onclick="dismissAlbum({{ album['id'] }})">Dismiss</button>
+                    {% else %}
+                    <button class="btn btn-sm" onclick="moveAlbum({{ album['id'] }}, 'to-listen')">Restore</button>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if ota_uuid %}
+            <div class="ota-rating-widget" data-album-id="{{ album['id'] }}" data-current="{{ ota_rating or '' }}">
+                <span class="ota-label">1001 Albums:</span>
+                {% for i in range(1, 6) %}
+                <button class="ota-star{% if ota_rating and i <= ota_rating %} active{% endif %}" data-rating="{{ i }}" onclick="rate1001({{ album['id'] }}, {{ i }})">{{ i }}</button>
+                {% endfor %}
+                <span class="ota-status" id="ota-status">{% if ota_rating %}{{ ota_rating }}/5{% else %}Not rated{% endif %}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if rym_entry %}
+    <section class="detail-section">
+        <h3>RYM Rating</h3>
+        <div class="detail-rym">
+            <span class="detail-rating-value">{{ '%.1f'|format(rym_entry['rating']) }}</span>
+            <span>rated {{ rym_entry['scraped_at'][:10] }}</span>
+            {% if rym_link %}
+            <a href="{{ rym_link }}" target="_blank" class="btn btn-sm">View on RYM</a>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if disco_release %}
+    <section class="detail-section">
+        <h3>Discography</h3>
+        <p>Part of <a href="/discography/{{ disco_release['da_id'] }}">{{ disco_release['artist_name'] }}</a>'s discography
+        {% if disco_release['release_type'] %} ({{ disco_release['release_type'] }}){% endif %}
+        {% if disco_release['year'] %} &middot; {{ disco_release['year'] }}{% endif %}
+        </p>
+    </section>
+    {% endif %}
+
+    <section class="detail-section">
+        <h3>Diary</h3>
+        <form class="diary-add-form" onsubmit="addDiary(event, {{ album['id'] }})">
+            <input type="date" name="date" value="{{ today }}" class="diary-date-input">
+            <input type="text" name="notes" placeholder="What did you think?" class="diary-notes-input">
+            <button type="submit" class="btn btn-sm">Add Entry</button>
+        </form>
+        {% if diary %}
+        <div class="diary-entries">
+            {% for entry in diary %}
+            <div class="diary-entry">
+                <span class="diary-date">{{ entry['listened_date'] }}</span>
+                {% if entry['notes'] %}<span class="diary-notes">{{ entry['notes'] }}</span>{% endif %}
+                <button class="diary-delete" onclick="deleteDiary({{ entry['id'] }})">&times;</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </section>
+
+    {% if tracks %}
+    <section class="detail-section">
+        <h3>Tracks</h3>
+        <div class="track-list">
+            {% for t in tracks %}
+            <div class="track-row">
+                <span class="track-num">{{ t['number'] }}</span>
+                <span class="track-title">{{ t['title'] }}</span>
+                <span class="track-dur">{{ t['duration'] }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if listen_dates %}
+    <section class="detail-section">
+        <h3>Recent Listens</h3>
+        <div class="listen-log">
+            {% for date, count in listen_dates.items() %}
+            <span class="listen-entry">{{ date }}{% if count > 1 %} ({{ count }}x){% endif %}</span>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>
+
+<script>
+async function addDiary(e, albumId) {
+    e.preventDefault();
+    const form = e.target;
+    const date = form.date.value || new Date().toISOString().slice(0, 10);
+    const notes = form.notes.value;
+    await fetch('/api/diary/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({album_id: albumId, date, notes})
+    });
+    location.reload();
+}
+async function deleteDiary(id) {
+    await fetch(`/api/diary/${id}/delete`, {method: 'POST'});
+    location.reload();
+}
+async function rate1001(albumId, rating) {
+    const widget = document.querySelector('.ota-rating-widget');
+    const current = parseInt(widget.dataset.current);
+    if (rating === current) return;
+    const stars = widget.querySelectorAll('.ota-star');
+    stars.forEach(s => s.disabled = true);
+    const status = document.getElementById('ota-status');
+    status.textContent = 'Saving...';
+    const resp = await fetch(`/api/album/${albumId}/rate-1001`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({rating})
+    });
+    const data = await resp.json();
+    stars.forEach(s => s.disabled = false);
+    if (data.status === 'rated') {
+        widget.dataset.current = rating;
+        stars.forEach(s => {
+            s.classList.toggle('active', parseInt(s.dataset.rating) <= rating);
+        });
+        status.textContent = rating + '/5';
+        if (!data.personal && !data.group) status.textContent += ' (API error)';
+    } else {
+        status.textContent = data.error || 'Error';
+    }
+}
+async function requestDownload(albumId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Requesting...';
+    try {
+        const resp = await fetch(`/api/album/${albumId}/request-download`, {method: 'POST'});
+        const data = await resp.json();
+        btn.textContent = resp.ok ? 'Queued' : (data.message || 'Not found');
+        if (resp.ok) btn.classList.add('btn-success');
+        else btn.disabled = false;
+    } catch { btn.textContent = 'Error'; btn.disabled = false; }
+}
+(function() {
+    const widget = document.querySelector('.ota-rating-widget');
+    if (!widget) return;
+    const stars = widget.querySelectorAll('.ota-star');
+    stars.forEach(star => {
+        star.addEventListener('mouseenter', function() {
+            const r = parseInt(this.dataset.rating);
+            stars.forEach(s => s.classList.toggle('preview', parseInt(s.dataset.rating) <= r));
+        });
+        star.addEventListener('mouseleave', function() {
+            stars.forEach(s => s.classList.remove('preview'));
+        });
+    });
+})();
+</script>
+{% endblock %}

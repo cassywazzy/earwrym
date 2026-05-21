@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - Listening Diary{% endblock %}
+{% block content %}
+<div class="diary-page">
+    <h2>Listening Diary <span class="count">({{ total }})</span></h2>
+
+    {% if entries %}
+    <div class="diary-timeline">
+        {% set ns = namespace(current_date='') %}
+        {% for entry in entries %}
+        {% if entry['listened_date'] != ns.current_date %}
+        {% set ns.current_date = entry['listened_date'] %}
+        <div class="diary-date-header">{{ entry['listened_date'] }}</div>
+        {% endif %}
+        <div class="diary-timeline-entry">
+            <div class="diary-entry-art">
+                {% if entry['cover_art_url'] %}
+                <img src="{{ entry['cover_art_url'] }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
+                {% else %}
+                <div class="art-placeholder"></div>
+                {% endif %}
+            </div>
+            <div class="diary-entry-info">
+                <a href="/album/{{ entry['album_id'] }}" class="album-title-link">{{ entry['title'] }}</a>
+                <span class="album-artist">{{ entry['artist'] }}</span>
+                {% if entry['notes'] %}
+                <p class="diary-entry-notes">{{ entry['notes'] }}</p>
+                {% endif %}
+                <div class="diary-entry-meta">
+                    <span class="genre-tag">{{ entry['genre_bucket'] }}</span>
+                    {% if entry['rym_rating'] %}
+                    <span class="rating-value">{{ '%.1f'|format(entry['rym_rating']) }}</span>
+                    {% endif %}
+                    {% if entry['album_year'] %}
+                    <span class="text-muted">{{ entry['album_year'] }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if total > per_page %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="/diary?page={{ page - 1 }}" class="btn">Previous</a>
+        {% endif %}
+        <span>Page {{ page }} of {{ ((total - 1) // per_page) + 1 }}</span>
+        {% if page * per_page < total %}
+        <a href="/diary?page={{ page + 1 }}" class="btn">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <p class="empty">No diary entries yet. Visit an album's detail page to log a listen.</p>
+    {% endif %}
+</div>
+{% endblock %}

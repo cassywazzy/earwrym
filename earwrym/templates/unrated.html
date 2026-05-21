@@ -9,17 +9,17 @@
         <div class="album-card state-unrated">
             <div class="album-art">
                 {% if album['cover_art_url'] %}
-                <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                <img src="{{ album['cover_art_url'] }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
                 {% else %}
                 <div class="art-placeholder"></div>
                 {% endif %}
             </div>
             <div class="album-info">
-                <span class="album-title">{{ album['title'] }}</span>
+                <a href="/album/{{ album['id'] }}" class="album-title-link">{{ album['title'] }}</a>
                 <span class="album-artist">{{ album['artist'] }}{% if album['year'] %} ({{ album['year'] }}){% endif %}</span>
                 <span class="album-meta">{{ album['genre_bucket'] }} &middot; {{ album['tracks_heard'] or 0 }}/{{ album['track_count'] or '?' }} tracks</span>
                 <div class="album-actions">
-                    <a href="https://rateyourmusic.com/search?searchterm={{ (album['artist'] ~ ' ' ~ album['title'])|urlencode }}&searchtype=l" target="_blank" class="btn btn-rate">Rate on RYM</a>
+                    <a href="https://rateyourmusic.com/release/album/{{ album['artist']|rym_slug }}/{{ album['title']|rym_slug }}/" target="_blank" class="btn btn-rate">Rate on RYM</a>
                     <button class="btn btn-dismiss" onclick="dismissAlbum({{ album['id'] }})">Dismiss</button>
                 </div>
             </div>

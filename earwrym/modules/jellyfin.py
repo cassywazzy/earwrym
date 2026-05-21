@@ -156,3 +156,37 @@ class JellyfinClient:
         if not data:
             return []
         return data.get("Items", [])
+
+    def get_recently_played(self, limit=200):
+        """Get recently played tracks grouped by album."""
+        data = self._request("GET", f"/Users/{self.user_id}/Items", params={
+            "IncludeItemTypes": "Audio",
+            "Recursive": "true",
+            "SortBy": "DatePlayed",
+            "SortOrder": "Descending",
+            "Filters": "IsPlayed",
+            "Limit": str(limit),
+        })
+        if not data:
+            return []
+        albums = {}
+        for item in data.get("Items", []):
+            album_name = item.get("Album", "")
+            artist = item.get("AlbumArtist", "")
+            if not album_name or not artist:
+                continue
+            key = f"{artist.lower()}|{album_name.lower()}"
+            played = item.get("UserData", {}).get("LastPlayedDate", "")
+            if key not in albums:
+                albums[key] = {
+                    "artist": artist,
+                    "title": album_name,
+                    "tracks_played": 0,
+                    "last_played": played,
+                    "track_names": [],
+                }
+            albums[key]["tracks_played"] += 1
+            albums[key]["track_names"].append(item.get("Name", ""))
+            if played > albums[key]["last_played"]:
+                albums[key]["last_played"] = played
+        return list(albums.values())

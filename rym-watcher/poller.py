@@ -1,5 +1,5 @@
 """
-RYM Poller — calls FlareSolverr to fetch RYM pages (solving Cloudflare),
+RYM Poller — uses Pydoll (Chrome CDP) to fetch RYM pages past Cloudflare,
 parses ratings + wishlist, and posts them to Earwrym.
 
 Modes:
@@ -7,15 +7,17 @@ Modes:
   2. Incremental — checks /collection/{user}/recent/ for new ratings (1 request)
   3. Wishlist — checks /collection/{user}/wishlist for new items, forwards to Earwrym
 """
+import asyncio
 import json
 import logging
 import os
 import random
 import re
+import signal
+import subprocess
 import sys
 import time
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,36 +26,95 @@ logging.basicConfig(
 )
 log = logging.getLogger("rym-poller")
 
-FLARESOLVERR_URL = os.environ.get("FLARESOLVERR_URL", "http://10.1.10.63:8191")
 EARWRYM_URL = os.environ.get("EARWRYM_URL", "http://earwrym:8587")
 RYM_USERNAME = os.environ.get("RYM_USERNAME", "")
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL_SECONDS", "7200"))
 JITTER_SECONDS = int(os.environ.get("JITTER_SECONDS", "300"))
 HC_PING_URL = os.environ.get("HC_PING_URL", "")
+MAX_PAGES = int(os.environ.get("MAX_PAGES", "50"))
 STATE_FILE = "/data/poller_state.json"
+PROFILE_DIR = "/data/chrome_profile"
 
 
-def fetch_via_flaresolverr(url):
-    payload = {"cmd": "request.get", "url": url, "maxTimeout": 60000}
-    body = json.dumps(payload).encode()
-    req = Request(
-        f"{FLARESOLVERR_URL}/v1",
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+def _kill_chrome():
+    """Kill any lingering Chrome processes."""
     try:
-        with urlopen(req, timeout=90) as resp:
-            data = json.loads(resp.read())
-            if data.get("status") == "ok":
-                return data.get("solution", {}).get("response", "")
-            log.error("FlareSolverr error: %s — %s", data.get("status"), data.get("message", ""))
-            return None
-    except HTTPError as e:
-        log.error("FlareSolverr HTTP error %s", e.code)
+        subprocess.run(["pkill", "-9", "-f", "google-chrome"], capture_output=True)
+    except Exception:
+        pass
+
+
+def _make_chrome_options():
+    from pydoll.browser.options import ChromiumOptions
+    opts = ChromiumOptions()
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--disable-software-rasterizer")
+    opts.add_argument("--disable-extensions")
+    opts.add_argument("--disable-background-networking")
+    opts.add_argument(f"--user-data-dir={PROFILE_DIR}")
+    opts.add_argument("--window-size=1920,1080")
+    opts.add_argument("--lang=en-US")
+    opts.add_argument("--remote-allow-origins=*")
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    return opts
+
+
+async def _check_page(tab, debug=False):
+    """Check if page is past Cloudflare. Returns html or None."""
+    html = await tab.page_source
+    if debug and html:
+        log.info("Page check: len=%d, has_challenge=%s, title=%s",
+                 len(html), "Just a moment" in html,
+                 re.search(r'<title>([^<]+)</title>', html[:1000], re.I))
+    if html and "Just a moment" not in html and len(html) > 2000:
+        return html
+    return None
+
+
+async def fetch_page(tab, url):
+    """Navigate to a URL, handle Cloudflare, return page source."""
+    try:
+        await tab.go_to(url)
+        await asyncio.sleep(random.uniform(4.0, 7.0))
+
+        html = await _check_page(tab, debug=True)
+        if html:
+            log.info("Page loaded (no challenge): %s (%d bytes)", url[:80], len(html))
+            return html
+
+        log.info("Challenge detected for %s, attempting bypass...", url[:80])
+
+        try:
+            async with tab.expect_and_bypass_cloudflare_captcha(
+                time_to_wait_captcha=20
+            ):
+                await tab.go_to(url)
+
+            await asyncio.sleep(random.uniform(5.0, 10.0))
+            html = await _check_page(tab)
+            if html:
+                log.info("Page loaded (after bypass): %s (%d bytes)", url[:80], len(html))
+                return html
+        except Exception as e:
+            log.warning("Bypass method failed: %s", e)
+
+        for wait in [10, 15, 20]:
+            log.info("Waiting %ds for challenge to auto-resolve...", wait)
+            await asyncio.sleep(wait)
+            html = await _check_page(tab, debug=True)
+            if html:
+                log.info("Page loaded (auto-resolved after %ds): %s (%d bytes)", wait, url[:80], len(html))
+                return html
+
+        log.warning("Could not get past Cloudflare for %s", url[:80])
+        return None
+    except asyncio.TimeoutError:
+        log.error("Timeout fetching %s", url[:80])
         return None
     except Exception as e:
-        log.error("FlareSolverr request failed: %s", e)
+        log.error("Error fetching %s: %s", url[:80], e)
         return None
 
 
@@ -80,7 +141,6 @@ def parse_ratings_from_html(html):
 
 
 def parse_wishlist_from_html(html):
-    """Parse wishlist items — same table structure but no rating."""
     items = []
     rows = re.findall(r'<tr id="page_catalog_item_\d+">(.*?)</tr>', html, re.DOTALL)
     for row in rows:
@@ -144,21 +204,6 @@ def ping_healthcheck(suffix=""):
         pass
 
 
-def wait_for_flaresolverr():
-    log.info("Checking FlareSolverr at %s ...", FLARESOLVERR_URL)
-    for _ in range(12):
-        try:
-            with urlopen(f"{FLARESOLVERR_URL}/", timeout=10) as resp:
-                if resp.status == 200:
-                    log.info("FlareSolverr is ready")
-                    return True
-        except Exception:
-            pass
-        time.sleep(5)
-    log.error("FlareSolverr not reachable after 60 seconds")
-    return False
-
-
 def load_state():
     try:
         with open(STATE_FILE) as f:
@@ -175,8 +220,7 @@ def save_state(state):
         json.dump(state, f)
 
 
-def crawl_ratings(state):
-    """Full crawl — continues from where it left off."""
+async def crawl_ratings(tab, state):
     start_page = state.get("crawl_page", 1)
     all_ratings = []
 
@@ -186,13 +230,9 @@ def crawl_ratings(state):
         url = f"https://rateyourmusic.com/collection/{RYM_USERNAME}/r0.5-5.0/{pg}"
         log.info("Fetching page %d: %s", pg, url)
 
-        html = fetch_via_flaresolverr(url)
+        html = await fetch_page(tab, url)
         if not html:
             log.warning("No response for page %d — pausing crawl", pg)
-            break
-
-        if "Just a moment" in html or len(html) < 2000:
-            log.warning("Challenge/empty on page %d — pausing crawl", pg)
             break
 
         ratings = parse_ratings_from_html(html)
@@ -213,7 +253,12 @@ def crawl_ratings(state):
             state["crawl_page"] = pg
             break
 
-        time.sleep(random.uniform(20, 60))
+        if pg - start_page >= MAX_PAGES:
+            log.info("Hit max pages (%d) for this cycle", MAX_PAGES)
+            state["crawl_page"] = pg
+            break
+
+        await asyncio.sleep(random.uniform(20, 60))
 
     if all_ratings:
         state["crawl_page"] = pg
@@ -225,12 +270,11 @@ def crawl_ratings(state):
     return all_ratings
 
 
-def check_recent(state):
-    """Incremental check — just the recent page."""
+async def check_recent(tab, state):
     url = f"https://rateyourmusic.com/collection/{RYM_USERNAME}/recent/"
     log.info("Checking recent ratings: %s", url)
-    html = fetch_via_flaresolverr(url)
-    if html and "Just a moment" not in html and len(html) > 2000:
+    html = await fetch_page(tab, url)
+    if html:
         ratings = parse_ratings_from_html(html)
         log.info("Recent page: %d ratings found", len(ratings))
         if ratings:
@@ -240,15 +284,14 @@ def check_recent(state):
     return []
 
 
-def check_wishlist(state):
-    """Check wishlist for new items not previously seen."""
+async def check_wishlist(tab, state):
     url = f"https://rateyourmusic.com/collection/{RYM_USERNAME}/wishlist,ss.dd"
     log.info("Checking wishlist: %s", url)
 
-    time.sleep(random.uniform(5, 20))
+    await asyncio.sleep(random.uniform(5, 20))
 
-    html = fetch_via_flaresolverr(url)
-    if not html or "Just a moment" in html or len(html) < 2000:
+    html = await fetch_page(tab, url)
+    if not html:
         log.warning("Could not fetch wishlist")
         return
 
@@ -281,49 +324,92 @@ def check_wishlist(state):
         log.info("No new wishlist items since last check")
 
 
-def run_check_cycle():
+async def run_check_cycle():
     if random.random() < 0.1:
         log.info("Skipping this cycle (random idle)")
         return
 
-    time.sleep(random.uniform(3, 45))
-    state = load_state()
+    await asyncio.sleep(random.uniform(3, 45))
 
-    if state["full_crawl_done"]:
-        check_recent(state)
-        time.sleep(random.uniform(10, 30))
-        check_wishlist(state)
-    else:
-        crawl_ratings(state)
+    _kill_chrome()
+    await asyncio.sleep(1)
+
+    from pydoll.browser import Chrome
+    log.info("Starting Chrome for this cycle...")
+    try:
+        async with Chrome(options=_make_chrome_options()) as browser:
+            tab = await browser.start()
+            log.info("Chrome ready, warming up with homepage...")
+
+            warmup = await fetch_page(tab, "https://rateyourmusic.com/")
+            if warmup:
+                log.info("Homepage warmup succeeded (%d bytes)", len(warmup))
+            else:
+                log.warning("Homepage warmup failed — continuing anyway")
+            await asyncio.sleep(random.uniform(5, 15))
+
+            state = load_state()
+
+            if state["full_crawl_done"]:
+                recent = await check_recent(tab, state)
+                if not recent:
+                    log.info("Retrying recent page...")
+                    await asyncio.sleep(random.uniform(10, 20))
+                    await check_recent(tab, state)
+                await asyncio.sleep(random.uniform(10, 30))
+                await check_wishlist(tab, state)
+            else:
+                await crawl_ratings(tab, state)
+
+            log.info("Scrape cycle complete, closing Chrome")
+    except Exception as e:
+        log.error("Chrome cycle failed: %s", e, exc_info=True)
+    finally:
+        _kill_chrome()
 
 
-def main():
+async def async_main():
     if not RYM_USERNAME:
         log.error("RYM_USERNAME env var is required")
         sys.exit(1)
 
-    log.info("RYM Poller starting")
+    log.info("RYM Poller starting (Pydoll/Chrome)")
     log.info("  User: %s", RYM_USERNAME)
     log.info("  Interval: %ds (+/- %ds)", CHECK_INTERVAL, JITTER_SECONDS)
-    log.info("  FlareSolverr: %s", FLARESOLVERR_URL)
     log.info("  Earwrym: %s", EARWRYM_URL)
-
-    if not wait_for_flaresolverr():
-        sys.exit(1)
+    log.info("  Profile: %s", PROFILE_DIR)
 
     while True:
         ping_healthcheck("/start")
         try:
-            run_check_cycle()
+            await run_check_cycle()
             ping_healthcheck()
         except Exception as e:
             log.error("Cycle failed: %s", e, exc_info=True)
             ping_healthcheck("/fail")
+            _kill_chrome()
 
         jitter = random.uniform(-JITTER_SECONDS, JITTER_SECONDS * 2)
         sleep_time = CHECK_INTERVAL + jitter
         log.info("Next check in %d seconds (~%.1f hours)", int(sleep_time), sleep_time / 3600)
-        time.sleep(sleep_time)
+        await asyncio.sleep(sleep_time)
+
+
+def main():
+    loop = asyncio.new_event_loop()
+
+    def shutdown(sig, frame):
+        log.info("Shutting down (signal %s)...", sig)
+        _kill_chrome()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+
+    try:
+        loop.run_until_complete(async_main())
+    except KeyboardInterrupt:
+        _kill_chrome()
 
 
 if __name__ == "__main__":

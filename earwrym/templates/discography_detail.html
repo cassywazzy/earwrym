@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - {{ artist['name'] }} Discography{% endblock %}
+{% block content %}
+<div class="disco-detail-page">
+    <div class="disco-header">
+        <h2>{{ artist['name'] }}</h2>
+        <div class="disco-header-actions">
+            <span class="disco-pct-large">{{ ((artist['completed_releases'] / artist['total_releases'] * 100) if artist['total_releases'] else 0)|int }}%</span>
+            <span class="disco-stats">{{ artist['completed_releases'] }}/{{ artist['total_releases'] }} releases</span>
+            <button class="btn btn-sm" onclick="refreshDisco({{ artist['id'] }})">Refresh</button>
+            <button class="btn btn-sm" onclick="togglePin({{ artist['id'] }})">{{ 'Unpin' if artist['pinned'] else 'Pin' }}</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteDisco({{ artist['id'] }})">Remove</button>
+        </div>
+    </div>
+
+    <div class="disco-progress-bar large">
+        <div class="disco-progress-fill" style="width: {{ (artist['completed_releases'] / artist['total_releases'] * 100) if artist['total_releases'] else 0 }}%"></div>
+    </div>
+
+    <div class="disco-release-list">
+        {% for release in releases %}
+        <div class="disco-release status-{{ release['status'] }}">
+            <span class="disco-release-year">{{ release['year'] or '?' }}</span>
+            <span class="disco-release-title">{{ release['title'] }}</span>
+            <span class="disco-release-type">{{ release['release_type']|upper }}</span>
+            <span class="disco-release-links">
+                <a href="https://rateyourmusic.com/search?searchterm={{ (artist['name'] ~ ' ' ~ release['title'])|urlencode }}&searchtype=l" target="_blank" title="Search on RYM">RYM</a>
+                {% if release['navidrome_id'] %}
+                <a href="https://navidrome.grayson.cat/app/#/album/{{ release['navidrome_id'] }}" target="_blank" title="Open in Navidrome">ND</a>
+                {% endif %}
+                {% if release['release_group_mbid'] %}
+                <a href="https://musicbrainz.org/release-group/{{ release['release_group_mbid'] }}" target="_blank" title="MusicBrainz">MB</a>
+                {% endif %}
+            </span>
+            <span class="disco-release-status">
+                {% if release['status'] == 'rated' %}{{ '%.1f'|format(release['rym_rating']) if release['rym_rating'] else 'Rated' }}
+                {% elif release['status'] == 'listened' %}Listened
+                {% elif release['status'] == 'queued' %}In Queue
+                {% else %}<button class="btn btn-sm btn-queue-release" onclick="queueRelease(this, '{{ artist['name']|e }}', '{{ release['title']|e }}', '{{ release['release_group_mbid']|e }}', {{ artist['id'] }})">Request &amp; Listen</button>
+                {% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <a href="/discography" class="btn" style="margin-top: 1rem;">Back to all artists</a>
+</div>
+
+<script>
+async function refreshDisco(id) {
+    event.target.disabled = true;
+    event.target.textContent = 'Refreshing...';
+    await fetch(`/api/discography/${id}/refresh`, {method: 'POST'});
+    location.reload();
+}
+async function togglePin(id) {
+    await fetch(`/api/discography/${id}/pin`, {method: 'POST'});
+    location.reload();
+}
+async function deleteDisco(id) {
+    if (!confirm('Remove this artist from tracking?')) return;
+    await fetch(`/api/discography/${id}/delete`, {method: 'POST'});
+    window.location = '/discography';
+}
+async function queueRelease(btn, artist, title, rgMbid, artistId) {
+    btn.disabled = true;
+    btn.textContent = 'Requesting...';
+    try {
+        const resp = await fetch('/api/discography/queue-release', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({artist, title, release_group_mbid: rgMbid, artist_id: artistId})
+        });
+        const data = await resp.json();
+        if (data.status === 'queued' || data.status === 'exists') {
+            btn.textContent = 'In Queue';
+            btn.classList.add('btn-success');
+            btn.closest('.disco-release').classList.remove('status-missing');
+            btn.closest('.disco-release').classList.add('status-queued');
+        } else {
+            btn.textContent = 'Error';
+            btn.disabled = false;
+        }
+    } catch {
+        btn.textContent = 'Error';
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

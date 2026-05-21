@@ -95,17 +95,116 @@ CREATE TABLE IF NOT EXISTS lidarr_pending (
     UNIQUE(artist, title)
 );
 
+CREATE TABLE IF NOT EXISTS discography_artists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    artist_mbid TEXT UNIQUE,
+    pinned INTEGER DEFAULT 0,
+    total_releases INTEGER DEFAULT 0,
+    completed_releases INTEGER DEFAULT 0,
+    cover_url TEXT,
+    added_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS discography_releases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    artist_id INTEGER NOT NULL REFERENCES discography_artists(id),
+    title TEXT NOT NULL,
+    release_group_mbid TEXT,
+    release_type TEXT,
+    year INTEGER,
+    status TEXT DEFAULT 'missing',
+    album_id INTEGER REFERENCES albums(id),
+    rym_rating REAL,
+    added_at TEXT NOT NULL,
+    UNIQUE(artist_id, release_group_mbid)
+);
+
+CREATE TABLE IF NOT EXISTS diary_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    album_id INTEGER NOT NULL REFERENCES albums(id),
+    listened_date TEXT NOT NULL,
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS album_tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    album_id INTEGER NOT NULL REFERENCES albums(id),
+    tag TEXT NOT NULL,
+    tag_type TEXT NOT NULL DEFAULT 'descriptor',
+    source TEXT NOT NULL,
+    weight INTEGER DEFAULT 1,
+    fetched_at TEXT NOT NULL,
+    UNIQUE(album_id, tag, source)
+);
+
+CREATE TABLE IF NOT EXISTS taste_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    tag_distribution TEXT,
+    genre_distribution TEXT,
+    rating_distribution TEXT,
+    album_count INTEGER DEFAULT 0,
+    computed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS recommendation_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    artist_name TEXT NOT NULL,
+    album_title TEXT NOT NULL,
+    artist_mbid TEXT,
+    release_group_mbid TEXT,
+    release_mbid TEXT,
+    year INTEGER,
+    genre_tags TEXT,
+    cover_art_url TEXT,
+    source TEXT NOT NULL,
+    source_score REAL DEFAULT 0.0,
+    taste_score REAL DEFAULT 0.0,
+    taste_scores_json TEXT,
+    has_tags INTEGER DEFAULT 0,
+    in_library INTEGER DEFAULT 0,
+    dismissed INTEGER DEFAULT 0,
+    discovered_at TEXT NOT NULL,
+    UNIQUE(artist_name, album_title)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rec_candidates_score ON recommendation_candidates(taste_score DESC);
+CREATE INDEX IF NOT EXISTS idx_rec_candidates_source ON recommendation_candidates(source);
+
+
+CREATE INDEX IF NOT EXISTS idx_album_tags_album ON album_tags(album_id);
+CREATE INDEX IF NOT EXISTS idx_album_tags_tag ON album_tags(tag);
+CREATE INDEX IF NOT EXISTS idx_album_tags_source ON album_tags(source);
 CREATE INDEX IF NOT EXISTS idx_albums_state ON albums(state);
 CREATE INDEX IF NOT EXISTS idx_albums_mbid ON albums(mbid);
+CREATE INDEX IF NOT EXISTS idx_albums_search ON albums(title COLLATE NOCASE, artist COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_listens_album ON listens(album_id);
 CREATE INDEX IF NOT EXISTS idx_rym_ratings_slug ON rym_ratings_cache(rym_slug);
+CREATE INDEX IF NOT EXISTS idx_disco_artist_mbid ON discography_artists(artist_mbid);
+CREATE INDEX IF NOT EXISTS idx_disco_releases_artist ON discography_releases(artist_id);
+CREATE INDEX IF NOT EXISTS idx_diary_album ON diary_entries(album_id);
+CREATE INDEX IF NOT EXISTS idx_diary_date ON diary_entries(listened_date DESC);
 """
+
+
+_MIGRATIONS = [
+    "ALTER TABLE recommendation_candidates ADD COLUMN release_type TEXT DEFAULT ''",
+]
 
 
 def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with get_db() as db:
         db.executescript(SCHEMA)
+    with get_db() as db:
+        for migration in _MIGRATIONS:
+            try:
+                db.execute(migration)
+            except sqlite3.OperationalError:
+                pass
 
 
 @contextmanager

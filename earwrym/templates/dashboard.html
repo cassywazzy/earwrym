@@ -11,18 +11,19 @@
             <div class="album-card state-listening">
                 <div class="album-art">
                     {% if album['cover_art_url'] %}
-                    <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                    <img src="{{ album['cover_art_url'] }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
                     {% else %}
                     <div class="art-placeholder"></div>
                     {% endif %}
-                    <svg class="progress-ring" viewBox="0 0 36 36">
-                        <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                        <path class="ring-fill" stroke-dasharray="{{ (album['completion'] or 0) * 100 }}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                        <text x="18" y="20.35" class="ring-text">{{ ((album['completion'] or 0) * 100)|int }}%</text>
-                    </svg>
+                    {% if album['completion'] and album['completion'] > 0 %}
+                    <span class="progress-pct">{{ ((album['completion'] or 0) * 100)|int }}%</span>
+                    <div class="progress-bar-wrap">
+                        <div class="progress-bar-fill" style="width:{{ ((album['completion'] or 0) * 100)|int }}%"></div>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="album-info">
-                    <span class="album-title">{{ album['title'] }}</span>
+                    <a href="/album/{{ album['id'] }}" class="album-title-link">{{ album['title'] }}</a>
                     <span class="album-artist">{{ album['artist'] }}</span>
                     <span class="album-meta">{{ album['tracks_heard'] or 0 }}/{{ album['track_count'] or '?' }} tracks</span>
                 </div>
@@ -45,19 +46,19 @@
             <div class="album-card state-unrated">
                 <div class="album-art">
                     {% if album['cover_art_url'] %}
-                    <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                    <img src="{{ album['cover_art_url'] }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
                     {% else %}
                     <div class="art-placeholder"></div>
                     {% endif %}
                 </div>
                 <div class="album-info">
-                    <span class="album-title">{{ album['title'] }}</span>
+                    <a href="/album/{{ album['id'] }}" class="album-title-link">{{ album['title'] }}</a>
                     <span class="album-artist">{{ album['artist'] }}</span>
                     {% if album['wikipedia_blurb'] %}
                     <span class="album-blurb">{{ album['wikipedia_blurb'] }}</span>
                     {% endif %}
                     <div class="album-actions">
-                        <a href="https://rateyourmusic.com/search?searchterm={{ (album['artist'] ~ ' ' ~ album['title'])|urlencode }}&searchtype=l" target="_blank" class="btn btn-rate">Rate on RYM</a>
+                        <a href="https://rateyourmusic.com/release/album/{{ album['artist']|rym_slug }}/{{ album['title']|rym_slug }}/" target="_blank" class="btn btn-rate">Rate on RYM</a>
                         <button class="btn btn-dismiss" onclick="dismissAlbum({{ album['id'] }})">Dismiss</button>
                     </div>
                 </div>
@@ -80,13 +81,13 @@
             <div class="album-card state-to-listen" data-id="{{ album['id'] }}">
                 <div class="album-art">
                     {% if album['cover_art_url'] %}
-                    <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                    <img src="{{ album['cover_art_url'] }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
                     {% else %}
                     <div class="art-placeholder"></div>
                     {% endif %}
                 </div>
                 <div class="album-info">
-                    <span class="album-title">{{ album['title'] }}</span>
+                    <a href="/album/{{ album['id'] }}" class="album-title-link">{{ album['title'] }}</a>
                     <span class="album-artist">{{ album['artist'] }}</span>
                     <span class="album-meta genre-tag">{{ album['genre_bucket'] }}</span>
                     {% if album['source'] == '1001albums' %}

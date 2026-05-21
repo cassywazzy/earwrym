@@ -17,13 +17,13 @@
             <div class="drag-handle">&#9776;</div>
             <div class="album-art">
                 {% if album['cover_art_url'] %}
-                <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                <img src="{{ album['cover_art_url'] }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
                 {% else %}
                 <div class="art-placeholder"></div>
                 {% endif %}
             </div>
             <div class="album-info">
-                <span class="album-title">{{ album['title'] }}</span>
+                <a href="/album/{{ album['id'] }}" class="album-title-link">{{ album['title'] }}</a>
                 <span class="album-artist">{{ album['artist'] }}{% if album['year'] %} ({{ album['year'] }}){% endif %}</span>
                 {% if album['wikipedia_blurb'] %}
                 <span class="album-blurb">{{ album['wikipedia_blurb'] }}</span>
@@ -38,6 +38,13 @@
                     <span class="source-tag">Lidarr</span>
                     {% elif album['source'] == 'recommendation' %}
                     <span class="source-tag">Recommended</span>
+                    {% endif %}
+                    {% if album['navidrome_id'] %}
+                    <a href="{{ navidrome_url }}/app/#/album/{{ album['navidrome_id'] }}" target="_blank" class="play-link play-navidrome" title="Play in Navidrome">&#9654; Play</a>
+                    {% else %}
+                    <span class="download-status" data-artist="{{ album['artist'] }}" data-title="{{ album['title'] }}" data-album-id="{{ album['id'] }}">
+                        <button class="btn btn-sm btn-request" onclick="requestDownload({{ album['id'] }}, this)">Request</button>
+                    </span>
                     {% endif %}
                 </div>
                 <div class="album-actions">
@@ -59,12 +66,44 @@
 const list = document.getElementById('to-listen-list');
 let draggedEl = null;
 
+/* Desktop: HTML5 drag */
 list.addEventListener('dragstart', e => {
     draggedEl = e.target.closest('.album-card');
     draggedEl.classList.add('dragging');
 });
+list.addEventListener('dragend', () => { finishDrag(); });
+list.addEventListener('dragover', e => {
+    e.preventDefault();
+    moveDragged(e.clientY);
+});
 
-list.addEventListener('dragend', e => {
+/* Mobile: touch events on drag handle */
+list.addEventListener('touchstart', e => {
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
+    draggedEl = handle.closest('.album-card');
+    draggedEl.classList.add('dragging');
+}, {passive: true});
+list.addEventListener('touchmove', e => {
+    if (!draggedEl) return;
+    e.preventDefault();
+    moveDragged(e.touches[0].clientY);
+}, {passive: false});
+list.addEventListener('touchend', () => { if (draggedEl) finishDrag(); });
+
+function moveDragged(y) {
+    const els = [...list.querySelectorAll('.album-card:not(.dragging):not([style*="display: none"])')];
+    const after = els.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) return {offset, element: child};
+        return closest;
+    }, {offset: Number.NEGATIVE_INFINITY}).element;
+    if (after) list.insertBefore(draggedEl, after);
+    else list.appendChild(draggedEl);
+}
+
+function finishDrag() {
     draggedEl.classList.remove('dragging');
     const cards = [...list.querySelectorAll('.album-card:not([style*="display: none"])')];
     cards.forEach((card, i) => {
@@ -74,23 +113,7 @@ list.addEventListener('dragend', e => {
             body: JSON.stringify({position: i})
         });
     });
-});
-
-list.addEventListener('dragover', e => {
-    e.preventDefault();
-    const afterEl = getDragAfterElement(list, e.clientY);
-    if (afterEl) list.insertBefore(draggedEl, afterEl);
-    else list.appendChild(draggedEl);
-});
-
-function getDragAfterElement(container, y) {
-    const els = [...container.querySelectorAll('.album-card:not(.dragging):not([style*="display: none"])')];
-    return els.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) return {offset, element: child};
-        return closest;
-    }, {offset: Number.NEGATIVE_INFINITY}).element;
+    draggedEl = null;
 }
 
 function filterGenre(genre) {
@@ -106,5 +129,74 @@ function filterGenre(genre) {
         }
     });
 }
+
+async function requestDownload(albumId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+    try {
+        const resp = await fetch(`/api/album/${albumId}/request-download`, {method: 'POST'});
+        const data = await resp.json();
+        if (data.status === 'already_downloaded') {
+            btn.textContent = 'Found! Reloading...';
+            btn.classList.add('btn-success');
+            setTimeout(() => location.reload(), 500);
+        } else if (resp.ok) {
+            btn.textContent = 'Searching...';
+            btn.classList.add('btn-success');
+        } else {
+            btn.textContent = data.message || 'Not found';
+            btn.disabled = false;
+        }
+    } catch {
+        btn.textContent = 'Error';
+        btn.disabled = false;
+    }
+}
+
+function formatSpeed(bytesPerSec) {
+    if (bytesPerSec <= 0) return '';
+    if (bytesPerSec > 1048576) return (bytesPerSec / 1048576).toFixed(1) + ' MB/s';
+    if (bytesPerSec > 1024) return (bytesPerSec / 1024).toFixed(0) + ' KB/s';
+    return bytesPerSec + ' B/s';
+}
+
+async function pollDownloadQueue() {
+    try {
+        const resp = await fetch('/api/download-queue');
+        const queue = await resp.json();
+        document.querySelectorAll('.download-status').forEach(el => {
+            const key = (el.dataset.artist + '|' + el.dataset.title).toLowerCase();
+            const item = queue[key];
+            if (item) {
+                const pct = Math.round(item.progress);
+                const speed = formatSpeed(item.dlspeed || 0);
+                const seeds = item.seeds || 0;
+                let label = '';
+                if (item.status === 'completed') {
+                    label = 'Importing...';
+                } else if (pct > 0 || speed) {
+                    label = `${pct}%`;
+                    if (speed) label += ` • ${speed}`;
+                    if (item.timeleft) label += ` • ${item.timeleft}`;
+                } else if (seeds === 0) {
+                    label = 'Waiting for seeds...';
+                } else {
+                    label = 'Starting...';
+                }
+                const bar = `<div class="dl-progress"><div class="dl-bar" style="width:${pct}%"></div><span class="dl-pct">${label}</span></div>`;
+                if (!el.querySelector('.dl-progress')) {
+                    el.querySelector('.btn-request')?.remove();
+                    el.insertAdjacentHTML('beforeend', bar);
+                } else {
+                    el.querySelector('.dl-bar').style.width = pct + '%';
+                    el.querySelector('.dl-pct').textContent = label;
+                }
+            }
+        });
+    } catch {}
+}
+
+pollDownloadQueue();
+setInterval(pollDownloadQueue, 15000);
 </script>
 {% endblock %}

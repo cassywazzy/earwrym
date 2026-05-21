@@ -29,6 +29,9 @@ def _apply_env_overrides(cfg):
         "EARWRYM_LIDARR_API_KEY": ("lidarr", "api_key"),
         "EARWRYM_1001_SLUG": ("one_thousand_one_albums", "project_slug"),
         "EARWRYM_HC_PING_URL": ("healthchecks", "ping_url"),
+        "EARWRYM_LB_TOKEN": ("listenbrainz", "token"),
+        "EARWRYM_LASTFM_API_KEY": ("lastfm", "api_key"),
+        "EARWRYM_ESSENTIA_MUSIC_DIR": ("essentia", "music_dir"),
     }
     for env_key, (section, field) in overrides.items():
         val = os.environ.get(env_key)

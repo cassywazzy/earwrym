@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - Discography Tracker{% endblock %}
+{% block content %}
+<div class="disco-page">
+    <h2>Discography Tracker</h2>
+
+    <div class="disco-add-form">
+        <input type="text" id="artist-search" placeholder="Add artist to track..." autocomplete="off">
+        <button class="btn" onclick="addArtist()">Track</button>
+    </div>
+
+    {% set in_progress = artists|selectattr('completed_releases', 'ne', artists[0]['total_releases'] if artists else 0)|list if artists else [] %}
+    {% set completed_list = [] %}
+    {% set ip_list = [] %}
+    {% for artist in artists %}
+        {% if artist['total_releases'] > 0 and artist['completed_releases'] >= artist['total_releases'] %}
+            {% if completed_list.append(artist) %}{% endif %}
+        {% else %}
+            {% if ip_list.append(artist) %}{% endif %}
+        {% endif %}
+    {% endfor %}
+
+    {% if ip_list %}
+    <div class="disco-grid">
+        {% for artist in ip_list %}
+        <a href="/discography/{{ artist['id'] }}" class="disco-card {% if artist['pinned'] %}pinned{% endif %}">
+            <div class="disco-info">
+                <span class="disco-name">{{ artist['name'] }}</span>
+                <span class="disco-stats">{{ artist['completed_releases'] }}/{{ artist['total_releases'] }} releases</span>
+            </div>
+            <div class="disco-progress-bar">
+                <div class="disco-progress-fill" style="width: {{ (artist['completed_releases'] / artist['total_releases'] * 100) if artist['total_releases'] else 0 }}%"></div>
+            </div>
+            <span class="disco-pct">{{ ((artist['completed_releases'] / artist['total_releases'] * 100) if artist['total_releases'] else 0)|int }}%</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% elif not completed_list %}
+    <p class="empty">No artists tracked yet. Add one above or pick from suggestions below.</p>
+    {% endif %}
+
+    {% if completed_list %}
+    <details class="disco-completed-section" open>
+        <summary><h3>Completed <span class="count">({{ completed_list|length }} artist{{ 's' if completed_list|length != 1 }})</span></h3></summary>
+        <div class="disco-grid completed">
+            {% for artist in completed_list %}
+            <a href="/discography/{{ artist['id'] }}" class="disco-card completed {% if artist['pinned'] %}pinned{% endif %}">
+                <div class="disco-info">
+                    <span class="disco-name">{{ artist['name'] }}</span>
+                    <span class="disco-stats">{{ artist['total_releases'] }} releases</span>
+                </div>
+                <div class="disco-progress-bar full">
+                    <div class="disco-progress-fill" style="width: 100%"></div>
+                </div>
+                <span class="disco-pct">100%</span>
+            </a>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+
+    {% if suggestions %}
+    <h3>Suggestions <span class="count">(artists with 2+ albums in your library)</span></h3>
+    <div class="disco-suggestions">
+        {% for s in suggestions %}
+        <button class="btn btn-sm suggestion-btn" onclick="addArtist('{{ s['name']|e }}')">{{ s['name'] }} ({{ s['album_count'] }})</button>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+async function addArtist(name) {
+    if (!name) {
+        name = document.getElementById('artist-search').value.trim();
+    }
+    if (!name) return;
+    const btn = event?.target;
+    if (btn) { btn.disabled = true; btn.textContent = 'Adding...'; }
+    const resp = await fetch('/api/discography/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name})
+    });
+    if (resp.ok) {
+        location.reload();
+    } else {
+        const data = await resp.json();
+        alert(data.error || 'Failed to add artist');
+        if (btn) { btn.disabled = false; btn.textContent = name; }
+    }
+}
+</script>
+{% endblock %}

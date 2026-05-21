@@ -3,42 +3,69 @@
 {% block content %}
 <div class="playlists-page">
     <h2>Genre Playlists</h2>
-    <p class="subtitle">Albums in to-listen/listening are synced to Navidrome playlists by genre bucket.</p>
+    <p class="subtitle">Albums in to-listen/listening synced to Navidrome + Jellyfin by genre.</p>
 
     <div class="pending-actions-bar">
-        <button class="btn" onclick="syncPlaylists()">Sync to Navidrome</button>
+        <button class="btn" onclick="syncPlaylists()" id="sync-btn">Sync Playlists</button>
     </div>
 
-    <div class="playlist-grid">
-        {% for bucket in bucket_counts %}
-        <div class="playlist-card">
-            <span class="playlist-name">{{ bucket['genre_bucket'] }}</span>
-            <span class="playlist-count">{{ bucket['cnt'] }} albums queued</span>
+    {% for bucket in bucket_counts %}
+    <details class="playlist-bucket" {% if loop.first %}open{% endif %}>
+        <summary class="playlist-bucket-header">
+            <span class="playlist-bucket-name">{{ bucket['genre_bucket'] }}</span>
+            <span class="playlist-bucket-count">{{ bucket['cnt'] }} album{{ 's' if bucket['cnt'] != 1 }}</span>
+            {% for pl in playlists if pl['genre_bucket'] == bucket['genre_bucket'] %}
+            {% if pl['navidrome_playlist_id'] and nd_url %}
+            <a href="{{ nd_url }}/app/#/playlist/{{ pl['navidrome_playlist_id'] }}/show" target="_blank" class="btn btn-sm playlist-nd-link" onclick="event.stopPropagation()">Open in Navidrome</a>
+            {% endif %}
+            {% endfor %}
+        </summary>
+        <div class="playlist-album-list">
+            {% for album in bucket_albums.get(bucket['genre_bucket'], []) %}
+            <div class="playlist-album-row">
+                <div class="playlist-album-art">
+                    {% if album['cover_art_url'] %}
+                    <img src="{{ album['cover_art_url'] }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
+                    {% else %}
+                    <div class="art-placeholder"></div>
+                    {% endif %}
+                </div>
+                <a href="/album/{{ album['id'] }}" class="album-title-link">{{ album['title'] }}</a>
+                <span class="album-artist">{{ album['artist'] }}</span>
+                <span class="detail-tag state-{{ album['state'] }}">{{ album['state']|replace('-', ' ')|title }}</span>
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-        {% if not bucket_counts %}
-        <p class="empty">No albums sorted into genre buckets yet.</p>
-        {% endif %}
-    </div>
+    </details>
+    {% endfor %}
+
+    {% if not bucket_counts %}
+    <p class="empty">No albums sorted into genre buckets yet.</p>
+    {% endif %}
 
     {% if playlists %}
-    <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--text-muted);">Synced Navidrome Playlists</h3>
-    <div class="album-list">
-        {% for pl in playlists %}
-        <div class="album-card">
-            <div class="album-info">
-                <span class="album-title">{{ pl['name'] }}</span>
-                <span class="album-meta">Bucket: {{ pl['genre_bucket'] or 'unlinked' }} | ID: {{ pl['navidrome_playlist_id'] or 'not synced' }}</span>
+    <section class="playlist-synced-section">
+        <h3>All Synced Playlists</h3>
+        <div class="playlist-synced-list">
+            {% for pl in playlists %}
+            <div class="playlist-synced-row">
+                <span class="playlist-synced-name">{{ pl['name'] }}</span>
+                <span class="playlist-synced-bucket">{{ pl['genre_bucket'] or 'unlinked' }}</span>
+                {% if pl['navidrome_playlist_id'] and nd_url %}
+                <a href="{{ nd_url }}/app/#/playlist/{{ pl['navidrome_playlist_id'] }}/show" target="_blank" class="btn btn-sm">Navidrome</a>
+                {% elif not pl['navidrome_playlist_id'] %}
+                <span class="text-muted">not synced</span>
+                {% endif %}
             </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
+    </section>
     {% endif %}
 </div>
 
 <script>
 async function syncPlaylists() {
-    const btn = event.target;
+    const btn = document.getElementById('sync-btn');
     btn.disabled = true;
     btn.textContent = 'Syncing...';
     try {
@@ -46,7 +73,7 @@ async function syncPlaylists() {
         setTimeout(() => location.reload(), 5000);
     } catch(e) {
         btn.textContent = 'Error';
-        setTimeout(() => { btn.textContent = 'Sync to Navidrome'; btn.disabled = false; }, 2000);
+        setTimeout(() => { btn.textContent = 'Sync Playlists'; btn.disabled = false; }, 2000);
     }
 }
 </script>

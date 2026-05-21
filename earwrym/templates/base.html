@@ -5,28 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Earwrym{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
 </head>
 <body>
     <header>
-        <div class="header-left">
-            <a href="/" class="logo">Earwrym</a>
-            <nav>
-                <a href="/" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a>
-                <a href="/to-listen" class="{% if request.path == '/to-listen' %}active{% endif %}">To-Listen</a>
-                <a href="/rated" class="{% if request.path == '/rated' %}active{% endif %}">Rated</a>
-                <a href="/stats" class="{% if request.path == '/stats' %}active{% endif %}">Stats</a>
-                <a href="/playlists" class="{% if request.path == '/playlists' %}active{% endif %}">Playlists</a>
-                <a href="/pending" class="{% if request.path == '/pending' %}active{% endif %}">Pending{% if pending_count %} <span class="badge">{{ pending_count }}</span>{% endif %}</a>
-                <a href="https://1001albumsgenerator.com/groups/{{ config.get('one_thousand_one_albums', {}).get('group_slug', '') }}" target="_blank" class="external">1001 Albums</a>
-            </nav>
+        <div class="header-top">
+            <a href="/" class="logo"><img src="{{ url_for('static', filename='logo.png') }}" alt="EarwRYM" class="logo-img">EarwRYM</a>
+            <form action="/search" method="get" class="search-form">
+                <input type="text" name="q" placeholder="Search..." value="{{ request.args.get('q', '') }}" class="search-input">
+            </form>
+            <div class="header-stats">
+                <span class="year-counter">{{ stats['albums_rated'] or 0 }} in {{ year }}</span>
+                {% if stats['current_streak'] and stats['current_streak'] > 1 %}
+                <span class="streak">{{ stats['current_streak'] }}d streak</span>
+                {% endif %}
+            </div>
         </div>
-        <div class="header-right">
-            <span class="year-counter">{{ stats['albums_rated'] or 0 }} albums in {{ year }}</span>
-            {% if stats['current_streak'] and stats['current_streak'] > 1 %}
-            <span class="streak">{{ stats['current_streak'] }}-day streak</span>
-            {% endif %}
-            <button class="btn-refresh" onclick="triggerRefresh()">Refresh</button>
-        </div>
+        <nav>
+            <a href="/" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a>
+            <a href="/to-listen" class="{% if request.path == '/to-listen' %}active{% endif %}">Queue</a>
+            <a href="/rated" class="{% if request.path == '/rated' %}active{% endif %}">Rated</a>
+            <a href="/diary" class="{% if request.path == '/diary' %}active{% endif %}">Diary</a>
+            <a href="/discography" class="{% if '/discography' in request.path %}active{% endif %}">Discography</a>
+            <a href="/pending" class="{% if request.path == '/pending' %}active{% endif %}">Pending{% if pending_count %} <span class="badge">{{ pending_count }}</span>{% endif %}</a>
+            <a href="/recommendations" class="{% if request.path == '/recommendations' %}active{% endif %}">Recs</a>
+            <div class="nav-more">
+                <button class="nav-more-btn">More</button>
+                <div class="nav-more-menu">
+                    <a href="/stats" class="{% if request.path == '/stats' %}active{% endif %}">Stats</a>
+                    <a href="/playlists" class="{% if request.path == '/playlists' %}active{% endif %}">Playlists</a>
+                    <a href="/1001" class="{% if request.path == '/1001' %}active{% endif %}">1001 Group</a>
+                    <a href="/essentia" class="{% if request.path == '/essentia' %}active{% endif %}">Essentia</a>
+                    <a href="/unrated" class="{% if request.path == '/unrated' %}active{% endif %}">Unrated</a>
+                    <a href="/settings" class="{% if request.path == '/settings' %}active{% endif %}">Settings</a>
+                    <a href="#" class="nav-refresh" onclick="triggerRefresh(); return false;">Refresh</a>
+                </div>
+            </div>
+        </nav>
     </header>
     <main>
         {% block content %}{% endblock %}

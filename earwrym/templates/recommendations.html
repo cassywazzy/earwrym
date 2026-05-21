@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - Recommendations{% endblock %}
+{% block content %}
+<div class="recs-page">
+    <h2>Recommendations</h2>
+
+    {% if taste_summary %}
+    <div class="taste-card">
+        <h3>Your Taste Profile</h3>
+        <p class="taste-summary">{{ taste_summary }}</p>
+        <div class="taste-stats">
+            <span>{{ profile.album_count }} rated albums</span>
+            <span>{{ profile.top_genres|length }} genres</span>
+            <span>Avg rating: {{ '%.1f'|format(profile.avg_rating) }}</span>
+        </div>
+        <div class="taste-genres">
+            {% for g in profile.top_genres[:8] %}
+            <span class="genre-pill">{{ g.genre }} <small>({{ g.count }})</small></span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="recs-controls">
+        <div class="recs-tabs">
+            <button class="tab-btn active" onclick="switchTab('for-you')">For You</button>
+            <button class="tab-btn" onclick="switchTab('deep-cuts')">Deep Cuts</button>
+            <button class="tab-btn" onclick="switchTab('genre-explore')">Explore Genre</button>
+        </div>
+        <div class="recs-actions">
+            <button class="btn btn-sm" onclick="runDiscovery(this)" title="Fetch new recommendations from ListenBrainz">Discover</button>
+            <button class="btn btn-sm" onclick="syncRecPlaylist()" title="Push top recs to Navidrome + Jellyfin playlist">Sync Playlist</button>
+            <button class="btn btn-sm" onclick="autoDownload()" title="Auto-request top unowned recs via Lidarr">Auto-Download Top {{ auto_dl_count }}</button>
+        </div>
+    </div>
+
+    <div id="genre-picker" class="genre-picker" style="display:none">
+        <select id="genre-select" onchange="filterByGenre(this.value)">
+            <option value="">Pick a genre...</option>
+            {% for g in all_genres %}
+            <option value="{{ g }}">{{ g }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="album-list" id="rec-list">
+        {% for rec in recommendations %}
+        <div class="album-card rec-card" data-score="{{ rec.taste_score }}" data-genre="{{ rec.genre_tags }}" data-has-tags="{{ 'yes' if rec.has_tags else 'no' }}" data-source="{{ rec.source }}" data-id="{{ rec.id }}">
+            <div class="rec-rank">#{{ loop.index }}</div>
+            <div class="album-art">
+                {% if rec.cover_art_url %}
+                {% if 'coverartarchive.org' in rec.cover_art_url %}
+                <img src="/api/cover-ext/{{ rec.release_mbid or rec.release_group_mbid }}{% if rec.release_mbid and rec.release_group_mbid %}?fb={{ rec.release_group_mbid }}{% endif %}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
+                {% else %}
+                <img src="{{ rec.cover_art_url }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
+                {% endif %}
+                {% else %}
+                <div class="art-placeholder"></div>
+                {% endif %}
+            </div>
+            <div class="album-info">
+                <span class="album-title-link" onclick="toggleDetail({{ rec.id }}, this)" style="cursor:pointer">{{ rec.album_title }}</span>
+                <span class="album-artist">{{ rec.artist_name }}{% if rec.year %} ({{ rec.year }}){% endif %}</span>
+                <div class="album-meta-row">
+                    {% if rec.release_type and rec.release_type != 'Album' %}
+                    <span class="type-badge type-{{ rec.release_type|lower }}">{{ rec.release_type }}</span>
+                    {% endif %}
+                    {% if rec.genre_tags %}
+                    <span class="genre-tag">{{ rec.genre_tags.split(',')[0].strip() }}</span>
+                    {% endif %}
+                    <span class="rec-score" title="Taste match: {{ '%.0f'|format(rec.taste_score * 100) }}%{% if rec.scores %} — genre {{ '%.0f'|format((rec.scores.primary_genres or 0) * 100) }}%{% endif %}">
+                        {{ '%.0f'|format(rec.taste_score * 100) }}% match
+                    </span>
+                    <span class="source-badge source-{{ rec.source }}">{{ rec.source | replace('lb_', '') | replace('_', ' ') }}</span>
+                    <button class="btn btn-sm btn-request" onclick="event.stopPropagation(); requestDownload('{{ rec.artist_name | e }}', '{{ rec.album_title | e }}', this)">Request</button>
+                    <button class="btn btn-xs btn-dismiss" onclick="event.stopPropagation(); dismissCandidate({{ rec.id }}, this)" title="Never show again">&times;</button>
+                </div>
+                <div class="rec-detail" id="detail-{{ rec.id }}" style="display:none"></div>
+                <div class="rec-explanation" id="explanation-{{ rec.id }}">
+                    <button class="btn btn-xs btn-explain" onclick="getExplanation({{ rec.id }}, '{{ rec.artist_name | e }}', '{{ rec.album_title | e }}', this)">Why this?</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if first_run %}
+    <div class="empty-state">
+        <p>No recommendations yet. Click <strong>Discover</strong> to fetch personalized recommendations from ListenBrainz — albums you haven't heard, from artists similar to ones you love.</p>
+        <button class="btn" onclick="runDiscovery(this)">Run Discovery</button>
+    </div>
+    {% elif not recommendations %}
+    <div class="empty-state">
+        <p>No recommendations available. Try clicking <strong>Discover</strong> to refresh, or rate more albums to improve your taste profile.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    const picker = document.getElementById('genre-picker');
+
+    document.querySelectorAll('[data-tab-fetched]').forEach(c => c.remove());
+
+    const cards = document.querySelectorAll('.rec-card:not([data-tab-fetched])');
+    let rank = 1;
+
+    if (tab === 'for-you') {
+        picker.style.display = 'none';
+        cards.forEach(c => {
+            c.style.display = '';
+            c.querySelector('.rec-rank').textContent = '#' + rank++;
+        });
+    } else if (tab === 'deep-cuts') {
+        picker.style.display = 'none';
+        cards.forEach(c => c.style.display = 'none');
+        fetchDeepCuts();
+    } else if (tab === 'genre-explore') {
+        picker.style.display = 'block';
+        document.getElementById('genre-select').value = '';
+        cards.forEach(c => {
+            c.style.display = '';
+            c.querySelector('.rec-rank').textContent = '#' + rank++;
+        });
+    }
+}
+
+async function fetchDeepCuts() {
+    const list = document.getElementById('rec-list');
+    try {
+        const resp = await fetch('/api/recommendations/deep-cuts');
+        const recs = await resp.json();
+        recs.forEach((rec, i) => {
+            list.appendChild(buildRecCard(rec, i));
+        });
+        if (recs.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.dataset.tabFetched = '1';
+            empty.innerHTML = '<p>No deep cuts found yet. Run <strong>Discover</strong> to find more albums.</p>';
+            list.appendChild(empty);
+        }
+    } catch(e) {
+        console.error('Deep cuts fetch failed:', e);
+    }
+}
+
+function buildRecCard(rec, index) {
+    const mbid = rec.release_mbid || rec.release_group_mbid;
+    const fbParam = (rec.release_mbid && rec.release_group_mbid) ? `?fb=${rec.release_group_mbid}` : '';
+    const coverHtml = rec.cover_art_url
+        ? (rec.cover_art_url.includes('coverartarchive.org')
+            ? `<img src="/api/cover-ext/${mbid}${fbParam}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">`
+            : `<img src="${rec.cover_art_url}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">`)
+        : '<div class="art-placeholder"></div>';
+    const firstGenre = rec.genre_tags ? rec.genre_tags.split(',')[0].trim() : '';
+    const scoreStr = (rec.taste_score * 100).toFixed(0);
+    const safeArtist = rec.artist_name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const safeAlbum = rec.album_title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const card = document.createElement('div');
+    card.className = 'album-card rec-card';
+    card.dataset.tabFetched = '1';
+    card.dataset.score = rec.taste_score;
+    card.dataset.genre = rec.genre_tags;
+    card.dataset.source = rec.source;
+    card.innerHTML = `
+        <div class="rec-rank">#${index + 1}</div>
+        <div class="album-art">${coverHtml}</div>
+        <div class="album-info">
+            <span class="album-title-link" onclick="toggleDetail(${rec.id}, this)" style="cursor:pointer">${rec.album_title}</span>
+            <span class="album-artist">${rec.artist_name}${rec.year ? ' (' + rec.year + ')' : ''}</span>
+            <div class="album-meta-row">
+                ${rec.release_type && rec.release_type !== 'Album' ? `<span class="type-badge type-${rec.release_type.toLowerCase()}">${rec.release_type}</span>` : ''}
+                ${firstGenre ? `<span class="genre-tag">${firstGenre}</span>` : ''}
+                <span class="rec-score">${scoreStr}% match</span>
+                <span class="source-badge source-${rec.source}">${rec.source.replace('lb_', '').replace(/_/g, ' ')}</span>
+                <button class="btn btn-sm btn-request" onclick="event.stopPropagation(); requestDownload('${safeArtist}', '${safeAlbum}', this)">Request</button>
+                <button class="btn btn-xs btn-dismiss" onclick="event.stopPropagation(); dismissCandidate(${rec.id}, this)" title="Never show again">&times;</button>
+            </div>
+            <div class="rec-detail" id="detail-${rec.id}" style="display:none"></div>
+            <div class="rec-explanation" id="explanation-${rec.id}">
+                <button class="btn btn-xs btn-explain" onclick="getExplanation(${rec.id}, '${safeArtist}', '${safeAlbum}', this)">Why this?</button>
+            </div>
+        </div>`;
+    return card;
+}
+
+async function filterByGenre(genre) {
+    const list = document.getElementById('rec-list');
+    if (!genre) {
+        document.querySelectorAll('[data-tab-fetched]').forEach(c => c.remove());
+        document.querySelectorAll('.rec-card').forEach(c => c.style.display = '');
+        let rank = 1;
+        document.querySelectorAll('.rec-card').forEach(c => c.querySelector('.rec-rank').textContent = '#' + rank++);
+        return;
+    }
+    try {
+        const resp = await fetch(`/api/recommendations/by-genre?genre=${encodeURIComponent(genre)}`);
+        const recs = await resp.json();
+        document.querySelectorAll('[data-tab-fetched]').forEach(c => c.remove());
+        document.querySelectorAll('.rec-card').forEach(c => c.style.display = 'none');
+        recs.forEach((rec, i) => list.appendChild(buildRecCard(rec, i)));
+        if (recs.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.dataset.tabFetched = '1';
+            empty.innerHTML = '<p>No recommendations found for this genre yet. Run <strong>Discover</strong> to find more.</p>';
+            list.appendChild(empty);
+        }
+    } catch(e) {
+        console.error('Genre filter failed:', e);
+    }
+}
+
+async function getExplanation(candidateId, artist, album, btn) {
+    btn.textContent = 'Thinking...';
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/api/recommendations/explain-candidate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({candidate_id: candidateId, artist, album})
+        });
+        const data = await resp.json();
+        const container = document.getElementById(`explanation-${candidateId}`);
+        if (data.explanation) {
+            container.innerHTML = `<span class="explanation-text">${data.explanation}</span>`;
+        } else {
+            btn.textContent = 'No explanation available';
+        }
+    } catch(e) {
+        btn.textContent = 'Error';
+        setTimeout(() => { btn.textContent = 'Why this?'; btn.disabled = false; }, 2000);
+    }
+}
+
+async function toggleDetail(candidateId, titleEl) {
+    const detail = document.getElementById(`detail-${candidateId}`);
+    if (!detail) return;
+    if (detail.style.display !== 'none') {
+        detail.style.display = 'none';
+        return;
+    }
+    if (detail.dataset.loaded) {
+        detail.style.display = '';
+        return;
+    }
+    detail.innerHTML = '<span class="detail-loading">Loading...</span>';
+    detail.style.display = '';
+    try {
+        const resp = await fetch(`/api/recommendations/detail/${candidateId}`);
+        const data = await resp.json();
+        let html = '';
+        if (data.wikipedia_blurb) {
+            html += `<p class="detail-blurb">${data.wikipedia_blurb}</p>`;
+        }
+        if (data.artist_blurb && !data.wikipedia_blurb) {
+            html += `<p class="detail-blurb"><em>About the artist:</em> ${data.artist_blurb}</p>`;
+        }
+        if (data.all_tags) {
+            html += `<div class="detail-tags">${data.all_tags.split(', ').map(t => `<span class="genre-pill">${t}</span>`).join(' ')}</div>`;
+        }
+        if (!data.wikipedia_blurb && !data.artist_blurb && !data.all_tags) {
+            html = '<p class="detail-blurb" style="opacity:0.5">No additional info available.</p>';
+        }
+        detail.innerHTML = html;
+        detail.dataset.loaded = '1';
+    } catch(e) {
+        detail.innerHTML = '<span class="detail-loading">Failed to load</span>';
+    }
+}
+
+async function requestDownload(artist, album, btn) {
+    btn.textContent = 'Requesting...';
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/api/recommendations/request-download', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({artist, album})
+        });
+        const data = await resp.json();
+        btn.textContent = data.status === 'requested' ? 'Requested' : (data.status || 'Done');
+    } catch(e) {
+        btn.textContent = 'Error';
+        setTimeout(() => { btn.textContent = 'Request'; btn.disabled = false; }, 2000);
+    }
+}
+
+async function dismissCandidate(id, btn) {
+    const card = btn.closest('.rec-card');
+    try {
+        await fetch(`/api/recommendations/dismiss/${id}`, {method: 'POST'});
+        card.style.opacity = '0.3';
+        setTimeout(() => card.remove(), 300);
+    } catch(e) {}
+}
+
+async function runDiscovery(btn) {
+    btn.textContent = 'Discovering...';
+    btn.disabled = true;
+    try {
+        await fetch('/api/recommendations/discover', {method: 'POST'});
+        btn.textContent = 'Running (refresh in ~60s)';
+        setTimeout(() => location.reload(), 60000);
+    } catch(e) {
+        btn.textContent = 'Error';
+        setTimeout(() => { btn.textContent = 'Discover'; btn.disabled = false; }, 2000);
+    }
+}
+
+async function syncRecPlaylist() {
+    const btn = event.target;
+    btn.textContent = 'Syncing...';
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/api/recommendations/sync-playlist', {method: 'POST'});
+        const data = await resp.json();
+        btn.textContent = `Synced (${data.tracks} tracks)`;
+        setTimeout(() => { btn.textContent = 'Sync Playlist'; btn.disabled = false; }, 3000);
+    } catch(e) {
+        btn.textContent = 'Error';
+        setTimeout(() => { btn.textContent = 'Sync Playlist'; btn.disabled = false; }, 2000);
+    }
+}
+
+async function autoDownload() {
+    const btn = event.target;
+    btn.textContent = 'Requesting...';
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/api/recommendations/auto-download', {method: 'POST'});
+        const data = await resp.json();
+        btn.textContent = `Requested ${data.requested} albums`;
+        setTimeout(() => { btn.textContent = 'Auto-Download Top {{ auto_dl_count }}'; btn.disabled = false; }, 3000);
+    } catch(e) {
+        btn.textContent = 'Error';
+        setTimeout(() => { btn.textContent = 'Auto-Download Top {{ auto_dl_count }}'; btn.disabled = false; }, 2000);
+    }
+}
+</script>
+{% endblock %}

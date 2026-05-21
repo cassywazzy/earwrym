@@ -46,6 +46,7 @@ class LidarrClient:
     def add_artist_with_album(self, artist_data, album_mbid):
         """Add artist to Lidarr with a specific album monitored."""
         artist_data["qualityProfileId"] = self.quality_profile_id
+        artist_data["metadataProfileId"] = artist_data.get("metadataProfileId") or 1
         artist_data["rootFolderPath"] = self.root_folder
         artist_data["monitored"] = True
         artist_data["monitorNewItems"] = "none"
@@ -85,6 +86,31 @@ class LidarrClient:
         """Check if artist exists in Lidarr."""
         artists = self.get_all_artists()
         return any(artist_name.lower() in a.get("artistName", "").lower() for a in artists)
+
+    def get_queue(self):
+        data = self._request("GET", "queue?pageSize=100&includeAlbum=true&includeArtist=true")
+        if not data:
+            return []
+        results = []
+        for record in data.get("records", []):
+            album_info = record.get("album", {})
+            artist_info = record.get("artist", {})
+            size = record.get("size", 0)
+            sizeleft = record.get("sizeleft", 0)
+            pct = round((1 - sizeleft / size) * 100, 1) if size > 0 else 0
+            results.append({
+                "id": record.get("id"),
+                "artist": artist_info.get("artistName", ""),
+                "title": album_info.get("title", ""),
+                "album_mbid": album_info.get("foreignAlbumId", ""),
+                "status": record.get("trackedDownloadState", record.get("status", "")),
+                "tracked_status": record.get("trackedDownloadStatus", ""),
+                "error": record.get("errorMessage", ""),
+                "progress": pct,
+                "timeleft": record.get("timeleft", ""),
+                "added": record.get("added", ""),
+            })
+        return results
 
     def get_recent_imports(self, since_date=None):
         """Get albums recently imported (downloaded) via Lidarr history."""

@@ -1,12 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Earwrym - Rated{% endblock %}
+{% block title %}Search{% if q %}: {{ q }}{% endif %} - Earwrym{% endblock %}
 {% block content %}
-<div class="rated-page">
-    <h2>Rated Albums <span class="count">({{ total }})</span></h2>
+<div class="search-page">
+    <h2>Search{% if q %}: "{{ q }}"{% endif %}</h2>
 
+    {% if q %}
+    <p class="subtitle">{{ results|length }} result{{ 's' if results|length != 1 }}</p>
+
+    {% if results %}
     <div class="album-list">
-        {% for album in albums %}
-        <div class="album-card state-rated">
+        {% for album in results %}
+        <div class="album-card state-{{ album['state'] }}">
             <div class="album-art">
                 {% if album['cover_art_url'] %}
                 <img src="{{ album['cover_art_url'] }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
@@ -17,28 +21,23 @@
             <div class="album-info">
                 <a href="/album/{{ album['id'] }}" class="album-title-link">{{ album['title'] }}</a>
                 <span class="album-artist">{{ album['artist'] }}{% if album['year'] %} ({{ album['year'] }}){% endif %}</span>
-                <div class="album-rating">
+                <div class="album-meta-row">
+                    <span class="genre-tag">{{ album['genre_bucket'] }}</span>
+                    <span class="detail-tag state-{{ album['state'] }}">{{ album['state']|replace('-', ' ')|title }}</span>
                     {% if album['rym_rating'] %}
                     <span class="rating-value">{{ '%.1f'|format(album['rym_rating']) }}</span>
-                    <span class="rating-stars">{% for i in range((album['rym_rating'] * 2)|int) %}&#9733;{% endfor %}</span>
                     {% endif %}
                 </div>
-                <span class="album-meta">{{ album['genre_bucket'] }} &middot; Rated {{ album['rym_rated_at'][:10] if album['rym_rated_at'] else 'unknown' }}</span>
             </div>
         </div>
         {% endfor %}
     </div>
+    {% else %}
+    <p class="empty">No albums found matching "{{ q }}".</p>
+    {% endif %}
 
-    {% if total > per_page %}
-    <div class="pagination">
-        {% if page > 1 %}
-        <a href="/rated?page={{ page - 1 }}" class="btn">Previous</a>
-        {% endif %}
-        <span>Page {{ page }} of {{ ((total - 1) // per_page) + 1 }}</span>
-        {% if page * per_page < total %}
-        <a href="/rated?page={{ page + 1 }}" class="btn">Next</a>
-        {% endif %}
-    </div>
+    {% else %}
+    <p class="empty">Type something in the search bar above.</p>
     {% endif %}
 </div>
 {% endblock %}

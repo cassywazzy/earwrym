@@ -8,26 +8,57 @@ services:
       - "8587:8587"
     volumes:
       - earwrym_data:/data
-      - ./config.yaml:/data/config.yaml:ro
+      - ./config.yaml:/data/config.yaml
+      - /srv/shared_data/media/music:/music:ro
+    env_file:
+      - .env
     environment:
       - EARWRYM_PORT=8587
+
+  gluetun-rym:
+    image: qmcgaw/gluetun
+    container_name: gluetun-rym
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${GLUETUN_RYM_WG_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=10.69.198.107/32
+      - SERVER_HOSTNAMES=ch-zrh-wg-001
+      - DOT=off
+      - DNS_ADDRESS=1.1.1.1
+      - FIREWALL_OUTBOUND_SUBNETS=10.1.10.0/24
+    healthcheck:
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   rym-watcher:
     build: ./rym-watcher
     container_name: rym-watcher
     restart: unless-stopped
+    init: true
+    network_mode: "service:gluetun-rym"
     depends_on:
-      - earwrym
+      gluetun-rym:
+        condition: service_healthy
     volumes:
       - earwrym_data:/data
     environment:
       - RYM_USERNAME=cassywassy
-      - EARWRYM_URL=http://earwrym:8587
-      - FLARESOLVERR_URL=http://10.1.10.63:8191
+      - EARWRYM_URL=http://10.1.10.66:8587
       - CHECK_INTERVAL_SECONDS=7200
       - JITTER_SECONDS=300
       - MAX_PAGES=50
       - HC_PING_URL=http://10.1.10.64:8095/ping/b788c00d-839a-423c-bf01-0729abf937d6
+    mem_limit: 1g
+    pids_limit: 150
+    shm_size: 256m
 
 volumes:
   earwrym_data:

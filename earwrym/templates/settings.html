@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - Settings{% endblock %}
+{% block content %}
+<div class="settings-page">
+    <h2>Settings</h2>
+    <div id="save-status" class="save-status" style="display:none"></div>
+
+    <form id="settings-form" onsubmit="saveSettings(event)">
+
+    <section class="settings-section">
+        <h3>ListenBrainz</h3>
+        <p class="section-desc">Scrobble source for listening activity and recommendations.</p>
+        <div class="field-group">
+            <label>Username</label>
+            <input type="text" name="listenbrainz.username" value="{{ cfg.listenbrainz.username or '' }}" placeholder="your-lb-username">
+        </div>
+        <div class="field-group">
+            <label>API Token <small>(from <a href="https://listenbrainz.org/settings/" target="_blank">listenbrainz.org/settings</a>)</small></label>
+            <input type="password" name="listenbrainz.token" value="{{ cfg.listenbrainz.token or '' }}" placeholder="LB API token for feedback submissions">
+        </div>
+        <div class="field-group">
+            <label>Enabled</label>
+            <input type="checkbox" name="listenbrainz.enabled" {{ 'checked' if cfg.listenbrainz.enabled else '' }}>
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>RateYourMusic</h3>
+        <p class="section-desc">Rating and wishlist sync from RYM.</p>
+        <div class="field-group">
+            <label>RYM Username</label>
+            <input type="text" name="rym.username" value="{{ cfg.rym.username or '' }}" placeholder="your-rym-username">
+        </div>
+        <div class="field-group">
+            <label>Scraping Enabled</label>
+            <input type="checkbox" name="rym.scrape_enabled" {{ 'checked' if cfg.rym.scrape_enabled else '' }}>
+        </div>
+        <div class="field-group">
+            <label>Wishlist to Lidarr</label>
+            <input type="checkbox" name="rym.wishlist_to_lidarr" {{ 'checked' if cfg.rym.wishlist_to_lidarr else '' }}>
+        </div>
+        <div class="field-group">
+            <label>Ratings Check Interval (seconds)</label>
+            <input type="number" name="rym.ratings_interval_seconds" value="{{ cfg.rym.ratings_interval_seconds or 7200 }}">
+        </div>
+        <div class="field-group">
+            <label>Wishlist Check Interval (seconds)</label>
+            <input type="number" name="rym.wishlist_interval_seconds" value="{{ cfg.rym.wishlist_interval_seconds or 21600 }}">
+        </div>
+        <div class="field-group">
+            <label>Proxy URL <small>(for VPN/VPS routing)</small></label>
+            <input type="text" name="rym.proxy_url" value="{{ cfg.rym.proxy_url or '' }}" placeholder="http://proxy:port">
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>Navidrome</h3>
+        <p class="section-desc">Music library server (Subsonic API).</p>
+        <div class="field-group">
+            <label>URL</label>
+            <input type="url" name="navidrome.url" value="{{ cfg.navidrome.url or '' }}" placeholder="http://10.1.10.56:4533">
+        </div>
+        <div class="field-group">
+            <label>Username</label>
+            <input type="text" name="navidrome.username" value="{{ cfg.navidrome.username or '' }}">
+        </div>
+        <div class="field-group">
+            <label>Password</label>
+            <input type="password" name="navidrome.password" value="{{ cfg.navidrome.password or '' }}">
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>Jellyfin</h3>
+        <p class="section-desc">Playlist sync and listen tracking.</p>
+        <div class="field-group">
+            <label>Enabled</label>
+            <input type="checkbox" name="jellyfin.enabled" {{ 'checked' if cfg.jellyfin.enabled else '' }}>
+        </div>
+        <div class="field-group">
+            <label>URL</label>
+            <input type="url" name="jellyfin.url" value="{{ cfg.jellyfin.url or '' }}" placeholder="http://10.1.10.56:8096">
+        </div>
+        <div class="field-group">
+            <label>API Key</label>
+            <input type="password" name="jellyfin.api_key" value="{{ cfg.jellyfin.api_key or '' }}">
+        </div>
+        <div class="field-group">
+            <label>User ID</label>
+            <input type="text" name="jellyfin.user_id" value="{{ cfg.jellyfin.user_id or '' }}">
+        </div>
+        <div class="field-group">
+            <label>Music Library ID</label>
+            <input type="text" name="jellyfin.music_library_id" value="{{ cfg.jellyfin.music_library_id or '' }}">
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>Lidarr</h3>
+        <p class="section-desc">Music download requests.</p>
+        <div class="field-group">
+            <label>Enabled</label>
+            <input type="checkbox" name="lidarr.enabled" {{ 'checked' if cfg.lidarr.enabled else '' }}>
+        </div>
+        <div class="field-group">
+            <label>URL</label>
+            <input type="url" name="lidarr.url" value="{{ cfg.lidarr.url or '' }}" placeholder="http://10.1.10.63:8686">
+        </div>
+        <div class="field-group">
+            <label>API Key</label>
+            <input type="password" name="lidarr.api_key" value="{{ cfg.lidarr.api_key or '' }}">
+        </div>
+        <div class="field-group">
+            <label>Quality Profile ID</label>
+            <input type="number" name="lidarr.quality_profile_id" value="{{ cfg.lidarr.quality_profile_id or 1 }}">
+        </div>
+        <div class="field-group">
+            <label>Root Folder</label>
+            <input type="text" name="lidarr.root_folder" value="{{ cfg.lidarr.root_folder or '/music' }}">
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>1001 Albums Generator</h3>
+        <p class="section-desc">Daily album from the 1001 project.</p>
+        <div class="field-group">
+            <label>Enabled</label>
+            <input type="checkbox" name="one_thousand_one_albums.enabled" {{ 'checked' if cfg.one_thousand_one_albums.enabled else '' }}>
+        </div>
+        <div class="field-group">
+            <label>Project Slug</label>
+            <input type="text" name="one_thousand_one_albums.project_slug" value="{{ cfg.one_thousand_one_albums.project_slug or '' }}">
+        </div>
+        <div class="field-group">
+            <label>Group Slug</label>
+            <input type="text" name="one_thousand_one_albums.group_slug" value="{{ cfg.one_thousand_one_albums.group_slug or '' }}">
+        </div>
+        <div class="field-group">
+            <label>Member Name</label>
+            <input type="text" name="one_thousand_one_albums.member_name" value="{{ cfg.one_thousand_one_albums.member_name or '' }}">
+        </div>
+        <div class="field-group">
+            <label>Push Ratings</label>
+            <input type="checkbox" name="one_thousand_one_albums.push_ratings" {{ 'checked' if cfg.one_thousand_one_albums.push_ratings else '' }}>
+        </div>
+        <div class="field-group">
+            <label>Auto-Request via Lidarr</label>
+            <input type="checkbox" name="one_thousand_one_albums.auto_request" {{ 'checked' if cfg.one_thousand_one_albums.get('auto_request', true) else '' }}>
+            <small>Automatically request the daily album via Lidarr if not already in library</small>
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>Ollama (AI)</h3>
+        <p class="section-desc">Local LLM for taste summaries, recommendation explanations, weekly digests, diary starters, and album comparisons. Requires <a href="https://ollama.ai" target="_blank">Ollama</a> running with a text model pulled.</p>
+        <div class="field-group">
+            <label>Enabled</label>
+            <input type="checkbox" name="ollama.enabled" {{ 'checked' if cfg.ollama.enabled else '' }}>
+        </div>
+        <div class="field-group">
+            <label>URL</label>
+            <input type="url" name="ollama.url" value="{{ cfg.ollama.url or '' }}" placeholder="http://localhost:11434">
+        </div>
+        <div class="field-group">
+            <label>Text Model <small>(taste summaries, explanations, digests)</small></label>
+            <input type="text" name="ollama.text_model" value="{{ cfg.ollama.text_model or 'llama3:8b' }}">
+        </div>
+        <div class="field-group">
+            <label>Vision Model <small>(future: cover art analysis)</small></label>
+            <input type="text" name="ollama.model" value="{{ cfg.ollama.model or 'llava:7b' }}">
+        </div>
+        <div class="ollama-status">
+            <button type="button" class="btn-action" onclick="checkOllama()">Test Connection</button>
+            <span id="ollama-status"></span>
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>Last.fm</h3>
+        <p class="section-desc">Folksonomy tags for mood descriptors.</p>
+        <div class="field-group">
+            <label>API Key <small>(from <a href="https://www.last.fm/api/account/create" target="_blank">last.fm/api</a>)</small></label>
+            <input type="password" name="lastfm.api_key" value="{{ cfg.lastfm.api_key or '' }}">
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>Essentia</h3>
+        <p class="section-desc">Audio feature analysis (BPM, key, danceability).</p>
+        <div class="field-group">
+            <label>Enabled</label>
+            <input type="checkbox" name="essentia.enabled" {{ 'checked' if cfg.essentia.enabled else '' }}>
+        </div>
+        <div class="field-group">
+            <label>Music Directory</label>
+            <input type="text" name="essentia.music_dir" value="{{ cfg.essentia.music_dir or '/music' }}">
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>qBittorrent</h3>
+        <p class="section-desc">Download monitoring for seeding policy.</p>
+        <div class="field-group">
+            <label>Enabled</label>
+            <input type="checkbox" name="qbittorrent.enabled" {{ 'checked' if cfg.qbittorrent.enabled else '' }}>
+        </div>
+        <div class="field-group">
+            <label>URL</label>
+            <input type="url" name="qbittorrent.url" value="{{ cfg.qbittorrent.url or '' }}" placeholder="http://10.1.10.57:8080">
+        </div>
+        <div class="field-group">
+            <label>Category</label>
+            <input type="text" name="qbittorrent.category" value="{{ cfg.qbittorrent.category or 'music' }}">
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <h3>Healthchecks</h3>
+        <p class="section-desc">Dead-man's-switch monitoring for all scheduled tasks.</p>
+        <div class="field-group">
+            <label>Ping Base URL</label>
+            <input type="url" name="healthchecks.ping_url" value="{{ cfg.healthchecks.ping_url or '' }}" placeholder="http://10.1.10.64:8095/ping/">
+            <small>Base ping URL (no UUID) &mdash; each task appends its own check ID.</small>
+        </div>
+        <div class="field-group">
+            <label>API URL</label>
+            <input type="url" name="healthchecks.api_url" value="{{ cfg.healthchecks.api_url or '' }}" placeholder="http://10.1.10.64:8095">
+            <small>Management API base URL (for auto-setup).</small>
+        </div>
+        <div class="field-group">
+            <label>API Key</label>
+            <input type="password" name="healthchecks.api_key" value="{{ cfg.healthchecks.api_key or '' }}">
+            <small>Project API key from Healthchecks settings &rarr; API Access.</small>
+        </div>
+        <div class="field-group" style="margin-top:0.5rem;">
+            <button type="button" class="btn btn-save" onclick="setupHealthchecks()">Auto-Setup All Checks</button>
+            <small>Creates a check for each scheduled task via the HC Management API.</small>
+        </div>
+        <div id="hc-status" style="margin-top:0.8rem;"></div>
+    </section>
+
+    <section class="settings-section">
+        <h3>General</h3>
+        <div class="field-group">
+            <label>App Name</label>
+            <input type="text" name="ui.app_name" value="{{ cfg.ui.app_name or 'Earwrym' }}">
+        </div>
+        <div class="field-group">
+            <label>Poll Interval (seconds) <small>ListenBrainz check frequency</small></label>
+            <input type="number" name="poll_interval_seconds" value="{{ cfg.poll_interval_seconds or 300 }}">
+        </div>
+        <div class="field-group">
+            <label>Album Filter: Min Tracks</label>
+            <input type="number" name="album_filter.min_tracks" value="{{ cfg.album_filter.min_tracks or 4 }}">
+        </div>
+        <div class="field-group">
+            <label>Album Filter: Min Duration (seconds)</label>
+            <input type="number" name="album_filter.min_duration_seconds" value="{{ cfg.album_filter.min_duration_seconds or 480 }}">
+        </div>
+        <div class="field-group">
+            <label>Completion Threshold <small>(0.0 - 1.0, when to mark as listened)</small></label>
+            <input type="number" step="0.05" min="0" max="1" name="album_filter.completion_threshold" value="{{ cfg.album_filter.completion_threshold or 0.8 }}">
+        </div>
+    </section>
+
+    <div class="settings-footer">
+        <button type="submit" class="btn btn-save">Save Settings</button>
+        <span class="settings-note">Changes take effect on next scheduler cycle. Restart the container for immediate effect.</span>
+    </div>
+    </form>
+</div>
+
+<script>
+async function saveSettings(e) {
+    e.preventDefault();
+    const form = e.target;
+    const data = {};
+
+    form.querySelectorAll('input').forEach(input => {
+        const key = input.name;
+        if (!key) return;
+        let value;
+        if (input.type === 'checkbox') {
+            value = input.checked;
+        } else if (input.type === 'number') {
+            value = input.step && input.step !== '1' ? parseFloat(input.value) : parseInt(input.value, 10);
+            if (isNaN(value)) value = input.value;
+        } else {
+            value = input.value;
+        }
+        data[key] = value;
+    });
+
+    const status = document.getElementById('save-status');
+    status.style.display = 'block';
+    status.textContent = 'Saving...';
+    status.className = 'save-status saving';
+
+    try {
+        const resp = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (result.status === 'saved') {
+            status.textContent = 'Settings saved successfully.';
+            status.className = 'save-status success';
+        } else {
+            status.textContent = 'Error: ' + (result.error || 'unknown');
+            status.className = 'save-status error';
+        }
+    } catch(e) {
+        status.textContent = 'Failed to save settings.';
+        status.className = 'save-status error';
+    }
+    setTimeout(() => { status.style.display = 'none'; }, 4000);
+}
+
+async function setupHealthchecks() {
+    const el = document.getElementById('hc-status');
+    el.innerHTML = '<span class="detail-loading">Creating checks...</span>';
+    try {
+        const resp = await fetch('/api/healthchecks/setup', {method:'POST'});
+        const data = await resp.json();
+        if (data.error) { el.innerHTML = '<span class="save-status error" style="display:inline">' + data.error + '</span>'; return; }
+        const nc = Object.keys(data.created||{}).length;
+        const ne = Object.keys(data.existing||{}).length;
+        const nf = Object.keys(data.errors||{}).length;
+        let h = '<div style="font-size:0.85rem;"><strong>' + nc + ' created, ' + ne + ' existing';
+        if (nf) h += ', ' + nf + ' failed';
+        h += '</strong> (' + data.total_tasks + ' total)';
+        if (nc) {
+            h += '<ul style="margin:0.3rem 0;padding-left:1.2rem;">';
+            for (const [s,u] of Object.entries(data.created)) h += '<li>' + s + ': <code>' + u.substring(0,8) + '...</code></li>';
+            h += '</ul>';
+        }
+        if (nf) {
+            h += '<div style="color:var(--danger);">Errors:<ul style="margin:0;padding-left:1.2rem;">';
+            for (const [s,e] of Object.entries(data.errors)) h += '<li>' + s + ': ' + e + '</li>';
+            h += '</ul></div>';
+        }
+        h += '</div>';
+        el.innerHTML = h;
+        if (nc) setTimeout(() => loadHcStatus(), 2000);
+    } catch(e) { el.innerHTML = '<span class="save-status error" style="display:inline">Setup failed: ' + e.message + '</span>'; }
+}
+
+async function loadHcStatus() {
+    try {
+        const resp = await fetch('/api/healthchecks/status');
+        const data = await resp.json();
+        const el = document.getElementById('hc-status');
+        if (!el) return;
+        const tasks = data.tasks || {};
+        const ok = Object.values(tasks).filter(t => t.configured).length;
+        const total = Object.keys(tasks).length;
+        let h = '<div style="font-size:0.85rem;"><strong>' + ok + '/' + total + ' tasks monitored</strong>';
+        h += '<table style="width:100%;margin-top:0.4rem;font-size:0.8rem;border-collapse:collapse;">';
+        h += '<tr><th style="text-align:left;padding:2px 6px;">Task</th><th style="padding:2px 6px;">Period</th><th style="padding:2px 6px;">Status</th></tr>';
+        for (const [slug, info] of Object.entries(tasks)) {
+            const p = info.period >= 86400 ? (info.period/86400)+'d' : info.period >= 3600 ? (info.period/3600)+'h' : (info.period/60)+'m';
+            const badge = info.configured ? '<span style="color:var(--success);">&#10003;</span>' : '<span style="color:var(--text-muted);">&mdash;</span>';
+            h += '<tr><td style="padding:2px 6px;">' + info.name.replace('Earwrym: ','') + '</td><td style="text-align:center;padding:2px 6px;">' + p + '</td><td style="text-align:center;padding:2px 6px;">' + badge + '</td></tr>';
+        }
+        h += '</table></div>';
+        el.innerHTML = h;
+    } catch(e) {}
+}
+async function checkOllama() {
+    const el = document.getElementById('ollama-status');
+    el.textContent = 'Checking...';
+    try {
+        const resp = await fetch('/api/ollama/status');
+        const data = await resp.json();
+        if (!data.enabled) {
+            el.textContent = 'Ollama is disabled. Enable it and save settings first.';
+        } else if (data.connected) {
+            const models = data.models.join(', ');
+            const hasText = data.models.includes(data.text_model);
+            el.innerHTML = `Connected! Models: ${models}` +
+                (hasText ? '' : `<br><strong>Warning:</strong> text model "${data.text_model}" not found. Run: <code>ollama pull ${data.text_model}</code>`);
+        } else {
+            el.textContent = 'Cannot connect to Ollama. Check the URL and ensure Ollama is running.';
+        }
+    } catch(e) {
+        el.textContent = 'Error: ' + e.message;
+    }
+}
+document.addEventListener('DOMContentLoaded', loadHcStatus);
+</script>
+{% endblock %}

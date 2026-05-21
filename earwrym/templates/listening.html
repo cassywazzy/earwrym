@@ -9,18 +9,19 @@
         <div class="album-card state-listening">
             <div class="album-art">
                 {% if album['cover_art_url'] %}
-                <img src="{{ album['cover_art_url'] }}" alt="{{ album['title'] }}" loading="lazy">
+                <img src="{{ album['cover_art_url'] }}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'art-placeholder'}))">
                 {% else %}
                 <div class="art-placeholder"></div>
                 {% endif %}
-                <svg class="progress-ring" viewBox="0 0 36 36">
-                    <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                    <path class="ring-fill" stroke-dasharray="{{ (album['completion'] or 0) * 100 }}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                    <text x="18" y="20.35" class="ring-text">{{ ((album['completion'] or 0) * 100)|int }}%</text>
-                </svg>
+                {% if album['completion'] and album['completion'] > 0 %}
+                <span class="progress-pct">{{ ((album['completion'] or 0) * 100)|int }}%</span>
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar-fill" style="width:{{ ((album['completion'] or 0) * 100)|int }}%"></div>
+                </div>
+                {% endif %}
             </div>
             <div class="album-info">
-                <span class="album-title">{{ album['title'] }}</span>
+                <a href="/album/{{ album['id'] }}" class="album-title-link">{{ album['title'] }}</a>
                 <span class="album-artist">{{ album['artist'] }}</span>
                 <span class="album-meta">{{ album['tracks_heard'] or 0 }}/{{ album['track_count'] or '?' }} tracks</span>
                 <div class="album-actions">

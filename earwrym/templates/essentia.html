@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Earwrym - Essentia Audio Analysis{% endblock %}
+{% block content %}
+<div class="dashboard">
+    <section class="section">
+        <h2>Essentia Audio Analysis</h2>
+        <div class="essentia-summary">
+            <div class="stat-cards">
+                <div class="stat-card">
+                    <span class="stat-value">{{ analyzed }}</span>
+                    <span class="stat-label">Albums Analyzed</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ total_albums }}</span>
+                    <span class="stat-label">Total Albums</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ '%d' % ((analyzed / total_albums * 100) if total_albums else 0) }}%</span>
+                    <span class="stat-label">Coverage</span>
+                </div>
+            </div>
+            {% if music_dir %}
+            <p class="essentia-dir">Music directory: <code>{{ music_dir }}</code></p>
+            {% else %}
+            <p class="essentia-dir warn">Essentia not configured. Add <code>essentia.music_dir</code> to config.yaml.</p>
+            {% endif %}
+            <div class="essentia-actions">
+                <button class="btn-action" onclick="analyzeEssentia()" id="btn-analyze">Analyze Next Batch (5)</button>
+                <span id="analyze-status"></span>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Tag Sources</h2>
+        <table class="essentia-table">
+            <thead><tr><th>Source</th><th>Albums</th><th>Tags</th></tr></thead>
+            <tbody>
+            {% for src in source_counts %}
+            <tr>
+                <td>{{ src['source'] }}</td>
+                <td>{{ src['albums'] }}</td>
+                <td>{{ src['tags'] }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    {% if recent %}
+    <section class="section">
+        <h2>Recent Analyses</h2>
+        <div class="essentia-results">
+            {% for r in recent %}
+            <div class="essentia-result-card">
+                <div class="result-art">
+                    {% if r['cover_art_url'] %}
+                    <img src="{{ r['cover_art_url'] }}" alt="" loading="lazy">
+                    {% else %}
+                    <div class="art-placeholder"></div>
+                    {% endif %}
+                </div>
+                <div class="result-info">
+                    <a href="/album/{{ r['album_id'] }}"><strong>{{ r['artist'] }}</strong> - {{ r['title'] }}</a>
+                    <div class="result-tags">
+                        {% for tag_pair in r['tags'].split('|') %}
+                        {% set parts = tag_pair.rsplit(':', 1) %}
+                        <span class="tag-chip{% if parts[0].startswith('bpm:') or parts[0].startswith('key:') %} metric{% endif %}">{{ parts[0] }}</span>
+                        {% endfor %}
+                    </div>
+                    <span class="result-date">{{ r['fetched_at'][:16] }}</span>
+                </div>
+                <button class="btn-small" onclick="reanalyze({{ r['album_id'] }})">Re-analyze</button>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>
+
+<script>
+async function analyzeEssentia() {
+    const btn = document.getElementById('btn-analyze');
+    const status = document.getElementById('analyze-status');
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    status.textContent = '';
+    try {
+        const resp = await fetch('/api/essentia/analyze', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({batch_size: 5})
+        });
+        const data = await resp.json();
+        if (data.status === 'already_running') {
+            status.textContent = `Already running: ${data.processed}/${data.total}`;
+        } else {
+            status.textContent = `Analyzing ${data.queued} albums...`;
+        }
+        pollEssentiaStatus();
+    } catch(e) {
+        status.textContent = 'Error: ' + e.message;
+        btn.disabled = false;
+        btn.textContent = 'Analyze Next Batch (5)';
+    }
+}
+
+function pollEssentiaStatus() {
+    const btn = document.getElementById('btn-analyze');
+    const status = document.getElementById('analyze-status');
+    const poll = setInterval(async () => {
+        try {
+            const resp = await fetch('/api/essentia/status');
+            const data = await resp.json();
+            if (data.running) {
+                btn.textContent = `Analyzing ${data.processed}/${data.total}...`;
+                status.textContent = `${data.tags} tags added so far`;
+            } else {
+                clearInterval(poll);
+                status.textContent = `Done: ${data.processed} albums, ${data.tags} tags added`;
+                btn.disabled = false;
+                btn.textContent = 'Analyze Next Batch (5)';
+                if (data.processed > 0) setTimeout(() => location.reload(), 1500);
+            }
+        } catch { clearInterval(poll); }
+    }, 3000);
+}
+
+async function reanalyze(albumId) {
+    const resp = await fetch('/api/essentia/analyze', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({album_id: albumId})
+    });
+    location.reload();
+}
+</script>
+{% endblock %}

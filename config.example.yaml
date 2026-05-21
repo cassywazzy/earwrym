@@ -74,8 +74,25 @@ genre_buckets:
   - name: "Other"
     tags: []  # catch-all for anything unmatched
 
+ollama:
+  enabled: false
+  url: ""             # e.g. http://localhost:11434 — your Ollama instance
+  text_model: "llama3:8b"     # for taste summaries, explanations, diary starters, digests
+  model: "llava:7b"           # vision model (future: cover art analysis)
+  # Features powered by Ollama:
+  #   - Taste profile summary (auto-generated with discovery pipeline)
+  #   - Per-album recommendation explanations
+  #   - Weekly listening digest (auto-generated every 7 days)
+  #   - Diary entry starters (on-demand via diary page)
+  #   - Album comparison narratives (on-demand via album page)
+  #   - Mood/vibe labels from tags (on-demand)
+  # Requires: Ollama running with the text model pulled (ollama pull llama3:8b)
+
 healthchecks:
-  ping_url: ""  # e.g. http://10.1.10.64:8095/ping/<uuid>
+  ping_url: ""      # e.g. http://10.1.10.64:8095/ping/
+  api_url: ""       # e.g. http://10.1.10.64:8095 (Management API base, for auto-setup)
+  api_key: ""       # project API key from Healthchecks settings
+  checks: {}        # auto-populated by /api/healthchecks/setup — maps task slug → UUID
 
 ui:
   max_visible_per_section: 5

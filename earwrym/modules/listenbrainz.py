@@ -10,8 +10,9 @@ BASE_URL = "https://api.listenbrainz.org/1"
 
 
 class ListenBrainzClient:
-    def __init__(self, username):
+    def __init__(self, username, token=None):
         self.username = username
+        self.token = token
 
     def _get(self, path, params=None):
         url = f"{BASE_URL}{path}"
@@ -28,6 +29,34 @@ class ListenBrainzClient:
         except Exception as e:
             log.warning("LB connection error: %s", e)
             return None
+
+    def _post(self, path, body):
+        if not self.token:
+            log.debug("No LB token configured, skipping POST %s", path)
+            return None
+        url = f"{BASE_URL}{path}"
+        data = json.dumps(body).encode("utf-8")
+        req = Request(url, data=data, method="POST", headers={
+            "User-Agent": "Earwrym/1.0",
+            "Authorization": f"Token {self.token}",
+            "Content-Type": "application/json",
+        })
+        try:
+            with urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read())
+        except HTTPError as e:
+            log.error("LB API POST error %s: %s", e.code, path)
+            return None
+        except Exception as e:
+            log.warning("LB POST connection error: %s", e)
+            return None
+
+    def submit_recording_feedback(self, recording_mbid, score):
+        """Submit love (1) / hate (-1) / neutral (0) feedback for a recording."""
+        return self._post("/feedback/recording-feedback", {
+            "recording_mbid": recording_mbid,
+            "score": score,
+        })
 
     def get_recent_listens(self, count=100, min_ts=None):
         params = {"count": count}
@@ -85,6 +114,74 @@ class ListenBrainzClient:
         if not data:
             return {}
         return data.get("payload", {}).get("daily_activity", {})
+
+
+    def get_cf_recommendations(self, count=100, offset=0):
+        """Get collaborative filtering recording recommendations."""
+        data = self._get(f"/cf/recommendation/user/{self.username}/recording", {
+            "count": count, "offset": offset
+        })
+        if not data:
+            return []
+        return data.get("payload", {}).get("mbids", [])
+
+    def get_fresh_releases(self, days=30, sort="confidence"):
+        """Get personalized fresh releases for the user."""
+        data = self._get(f"/user/{self.username}/fresh_releases", {
+            "days": days, "sort": sort, "past": "true", "future": "false"
+        })
+        if not data:
+            return []
+        return data.get("payload", {}).get("releases", [])
+
+    def get_recording_metadata(self, recording_mbids):
+        """Resolve recording MBIDs to full metadata (artist, release, tags)."""
+        if not recording_mbids:
+            return {}
+        url = f"{BASE_URL}/metadata/recording/"
+        data = json.dumps({
+            "recording_mbids": recording_mbids,
+            "inc": "artist tag release"
+        }).encode("utf-8")
+        req = Request(url, data=data, method="POST", headers={
+            "User-Agent": "Earwrym/1.0",
+            "Content-Type": "application/json",
+        })
+        try:
+            with urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read())
+        except Exception as e:
+            log.warning("LB metadata lookup failed: %s", e)
+            return {}
+
+    def get_similar_artists(self, artist_mbids):
+        """Get similar artists from LB Labs session-based algorithm."""
+        url = "https://labs.api.listenbrainz.org/similar-artists/json"
+        payload = json.dumps([{
+            "artist_mbids": artist_mbids,
+            "algorithm": "session_based_days_7500_session_300_contribution_5_threshold_10_limit_100_filter_True_skip_30"
+        }]).encode("utf-8")
+        req = Request(url, data=payload, method="POST", headers={
+            "User-Agent": "Earwrym/1.0",
+            "Content-Type": "application/json",
+        })
+        try:
+            with urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read())
+                if isinstance(result, list) and result:
+                    return result[0] if isinstance(result[0], list) else result
+                return result
+        except Exception as e:
+            log.warning("LB similar artists failed: %s", e)
+            return []
+
+    def get_playlist_tracks(self, playlist_mbid):
+        """Fetch tracks from a specific LB playlist."""
+        data = self._get(f"/playlist/{playlist_mbid}", {"fetch_metadata": "true"})
+        if not data:
+            return []
+        tracks = data.get("playlist", {}).get("track", [])
+        return tracks
 
 
 def extract_album_info(listen):
